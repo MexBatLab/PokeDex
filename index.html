@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pokédex — Battle Helper</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --red: #E63946;
+    --dark: #0d0d0f;
+    --card: #16161a;
+    --surface: #1e1e24;
+    --surface2: #26262e;
+    --border: rgba(255,255,255,0.07);
+    --text: #f0f0f5;
+    --muted: rgba(240,240,245,0.45);
+    --faint: rgba(240,240,245,0.12);
+    --radius: 20px;
+    --radius-sm: 12px;
+    --font: 'Outfit', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--dark);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* BG dots pattern */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 28px 28px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  /* ── Header ── */
+  .site-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 3rem;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .pokeball {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+    animation: spin-idle 8s linear infinite;
+  }
+  @keyframes spin-idle {
+    0%,85%,100% { transform: rotate(0deg); }
+    90% { transform: rotate(15deg); }
+    95% { transform: rotate(-8deg); }
+  }
+  .pb-top { position: absolute; top: 0; left: 0; right: 0; height: 50%; background: var(--red); }
+  .pb-band { position: absolute; top: calc(50% - 2px); left: 0; right: 0; height: 4px; background: rgba(0,0,0,0.5); }
+  .pb-center {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--dark);
+    border: 2px solid rgba(0,0,0,0.5);
+    z-index: 2;
+  }
+  .pb-center::after {
+    content: '';
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--text);
+    opacity: 0.5;
+  }
+
+  .logo-text h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+  .logo-text h1 span { color: var(--red); }
+  .logo-text p { font-size: 12px; color: var(--muted); font-weight: 400; margin-top: 3px; }
+
+  .gen-badge {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .gen-badge span { color: var(--red); font-weight: 600; }
+
+  /* ── Search ── */
+  .search-section { margin-bottom: 1.5rem; }
+
+  .search-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0 20px;
+    transition: border-color 0.2s;
+  }
+  .search-box:focus-within {
+    border-color: var(--red);
+    box-shadow: 0 0 0 3px rgba(230,57,70,0.12);
+  }
+  .search-box svg { flex-shrink: 0; opacity: 0.35; }
+  #search {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    padding: 16px 0;
+    font-size: 16px;
+    font-family: var(--font);
+    font-weight: 400;
+    color: var(--text);
+  }
+  #search::placeholder { color: var(--muted); }
+
+  .search-hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 10px;
+    padding: 0 4px;
+  }
+
+  /* ── Dropdown ── */
+  .search-wrap { position: relative; }
+  #dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0; right: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    z-index: 200;
+    overflow: hidden;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  #dropdown::-webkit-scrollbar { width: 4px; }
+  #dropdown::-webkit-scrollbar-track { background: transparent; }
+  #dropdown::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .dd-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  .dd-item:last-child { border-bottom: none; }
+  .dd-item:hover { background: var(--surface); }
+  .dd-img { width: 40px; height: 40px; image-rendering: pixelated; }
+  .dd-name { flex: 1; font-size: 14px; font-weight: 500; text-transform: capitalize; }
+  .dd-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .dd-num { font-size: 11px; color: var(--muted); }
+  .dd-types { display: flex; gap: 4px; }
+  .dd-type-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* ── Empty state ── */
+  #card { margin-top: 0.5rem; }
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .empty-icon {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: var(--surface2);
+    margin: 0 auto 1.25rem;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .empty-icon .pb-top { height: 50%; }
+  .empty-icon .pb-band { top: calc(50%-2px); height: 4px; }
+  .empty-icon .pb-center { width: 16px; height: 16px; }
+  .empty-state h2 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+  .empty-state p { font-size: 14px; color: var(--muted); }
+
+  /* ── Pokémon Card ── */
+  .poke-card {
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--card);
+    animation: fadeUp 0.3s ease;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Hero */
+  .hero {
+    position: relative;
+    padding: 2.5rem 2rem 1.5rem;
+    overflow: hidden;
+    min-height: 200px;
+  }
+  .hero-bg {
+    position: absolute; inset: 0;
+    opacity: 0.15;
+  }
+  .hero-circles {
+    position: absolute;
+    right: -40px; top: -40px;
+    width: 260px; height: 260px;
+    border-radius: 50%;
+    opacity: 0.08;
+  }
+  .hero-circles::after {
+    content: '';
+    position: absolute;
+    inset: 30px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+  }
+  .hero-num {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    position: relative; z-index: 2;
+  }
+  .hero-layout {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    position: relative; z-index: 2;
+    gap: 1rem;
+  }
+  .hero-info { flex: 1; }
+  .hero-name {
+    font-size: 36px;
+    font-weight: 800;
+    text-transform: capitalize;
+    line-height: 1;
+    letter-spacing: -1px;
+    color: #fff;
+    text-shadow: 0 2px 20px rgba(0,0,0,0.4);
+    margin-bottom: 12px;
+  }
+  .hero-types { display: flex; gap: 7px; flex-wrap: wrap; }
+  .type-pill {
+    padding: 5px 14px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: capitalize;
+    letter-spacing: 0.03em;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .hero-sprite {
+    width: 150px; height: 150px;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 8px 24px rgba(0,0,0,0.5));
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+  }
+  .hero-sprite:hover { transform: translateY(-6px) scale(1.05); }
+
+  /* Body */
+  .poke-body { padding: 1.75rem 2rem; }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  /* Stats */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0,1fr));
+    gap: 10px;
+    margin-bottom: 1.75rem;
+  }
+  .stat-card {
+    background: var(--surface);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+  }
+  .stat-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .stat-value { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1; }
+  .stat-bar-track {
+    height: 3px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  .stat-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  .sep { height: 1px; background: var(--border); margin: 1.75rem 0; }
+
+  /* Matchups */
+  .matchup-block { margin-bottom: 1.25rem; }
+  .matchup-block:last-child { margin-bottom: 0; }
+  .matchup-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .m-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: capitalize;
+    border: 1px solid rgba(0,0,0,0.2);
+    transition: transform 0.15s;
+  }
+  .m-chip:hover { transform: scale(1.05); }
+  .m-mult {
+    font-size: 10px;
+    font-weight: 700;
+    opacity: 0.75;
+    background: rgba(0,0,0,0.2);
+    padding: 1px 5px;
+    border-radius: 100px;
+  }
+
+  .immune-label { color: #a855f7; }
+  .resist-label { color: #22d3ee; }
+  .weak-label { color: #fb923c; }
+  .dblweak-label { color: var(--red); }
+
+  /* Loading */
+  .loading-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .loader {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: 3px solid var(--border);
+    border-top-color: var(--red);
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto 1rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Total stat badge */
+  .total-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 4px 12px 4px 10px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 1rem;
+  }
+  .total-badge strong { color: var(--text); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="site-header">
+    <div class="logo">
+      <div class="pokeball">
+        <div class="pb-top"></div>
+        <div class="pb-band"></div>
+        <div class="pb-center"></div>
+      </div>
+      <div class="logo-text">
+        <h1>Poké<span>dex</span></h1>
+        <p>Battle Type Helper</p>
+      </div>
+    </div>
+    <div class="gen-badge">Gen 1–<span>9</span> · Violet</div>
+  </header>
+
+  <div class="search-section">
+    <div class="search-wrap">
+      <div class="search-box">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="1.75"/>
+          <path d="M12 12L16 16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+        </svg>
+        <input id="search" type="text" placeholder="Search by name or Pokédex number..." autocomplete="off"/>
+      </div>
+      <div id="dropdown"></div>
+    </div>
+    <p class="search-hint">Try searching "sprigatito", "miraidon", or "1000" for Iron Hands</p>
+  </div>
+
+  <div id="card">
+    <div class="empty-state">
+      <div class="empty-icon">
+        <div class="pb-top"></div>
+        <div class="pb-band"></div>
+        <div class="pb-center"></div>
+      </div>
+      <h2>Search for a Pokémon</h2>
+      <p>Type any name or number to see type matchups,<br>base stats, and weaknesses</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const TC={normal:{bg:'#9FA19F',text:'#fff'},fire:{bg:'#E62829',text:'#fff'},water:{bg:'#0075BE',text:'#fff'},electric:{bg:'#FAC000',text:'#000'},grass:{bg:'#3D7D27',text:'#fff'},ice:{bg:'#79C6FD',text:'#000'},fighting:{bg:'#FF8000',text:'#fff'},poison:{bg:'#9141CB',text:'#fff'},ground:{bg:'#915121',text:'#fff'},flying:{bg:'#5EA5E8',text:'#fff'},psychic:{bg:'#EF4179',text:'#fff'},bug:{bg:'#91A119',text:'#fff'},rock:{bg:'#AFA981',text:'#000'},ghost:{bg:'#704170',text:'#fff'},dragon:{bg:'#5060E1',text:'#fff'},dark:{bg:'#49392F',text:'#fff'},steel:{bg:'#60A1B8',text:'#fff'},fairy:{bg:'#EF70EF',text:'#fff'}};
+const CHART={normal:{rock:0.5,ghost:0,steel:0.5},fire:{fire:0.5,water:0.5,grass:2,ice:2,bug:2,rock:0.5,dragon:0.5,steel:2},water:{fire:2,water:0.5,grass:0.5,ground:2,rock:2,dragon:0.5},electric:{water:2,electric:0.5,grass:0.5,ground:0,flying:2,dragon:0.5},grass:{fire:0.5,water:2,grass:0.5,poison:0.5,ground:2,flying:0.5,bug:0.5,rock:2,dragon:0.5,steel:0.5},ice:{fire:0.5,water:0.5,grass:2,ice:0.5,ground:2,flying:2,dragon:2,steel:0.5},fighting:{normal:2,ice:2,poison:0.5,flying:0.5,psychic:0.5,bug:0.5,rock:2,ghost:0,dark:2,steel:2,fairy:0.5},poison:{grass:2,poison:0.5,ground:0.5,rock:0.5,ghost:0.5,steel:0,fairy:2},ground:{fire:2,electric:2,grass:0.5,poison:2,flying:0,bug:0.5,rock:2,steel:2},flying:{electric:0.5,grass:2,fighting:2,bug:2,rock:0.5,steel:0.5},psychic:{fighting:2,poison:2,psychic:0.5,dark:0,steel:0.5},bug:{fire:0.5,grass:2,fighting:0.5,poison:0.5,flying:0.5,psychic:2,ghost:0.5,dark:2,steel:0.5,fairy:0.5},rock:{fire:2,ice:2,fighting:0.5,ground:0.5,flying:2,bug:2,steel:0.5},ghost:{normal:0,psychic:2,ghost:2,dark:0.5},dragon:{dragon:2,steel:0.5,fairy:0},dark:{fighting:0.5,psychic:2,ghost:2,dark:0.5,fairy:0.5},steel:{fire:0.5,water:0.5,electric:0.5,ice:2,rock:2,steel:0.5,fairy:2},fairy:{fire:0.5,fighting:2,poison:0.5,dragon:2,dark:2,steel:0.5}};
+const AT=Object.keys(CHART);
+
+function calcMult(types){
+  const m={};AT.forEach(t=>m[t]=1);
+  types.forEach(def=>{AT.forEach(atk=>{const c=CHART[atk]||{};m[atk]*=(c[def]!==undefined?c[def]:1);});});
+  return m;
+}
+function pill(type){
+  const c=TC[type]||{bg:'#888',text:'#fff'};
+  return `<span class="type-pill" style="background:${c.bg};color:${c.text}">${type}</span>`;
+}
+function chip(type,mult){
+  const c=TC[type]||{bg:'#888',text:'#fff'};
+  const lbl=mult===0?'0×':`${mult}×`;
+  return `<span class="m-chip" style="background:${c.bg};color:${c.text}">${type}<span class="m-mult">${lbl}</span></span>`;
+}
+function statColor(pct){
+  if(pct>75) return '#22d3ee';
+  if(pct>50) return '#4ade80';
+  if(pct>30) return '#facc15';
+  return '#f87171';
+}
+function fname(n){return n.split('-').map(p=>p[0].toUpperCase()+p.slice(1)).join(' ');}
+function fid(id){return '#'+String(id).padStart(4,'0');}
+function artwork(id){return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;}
+function sprite(id){return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;}
+
+let allPoke=[];let dbt=null;
+
+async function load(){
+  try{
+    const r=await fetch('https://pokeapi.co/api/v2/pokemon?limit=2000');
+    const d=await r.json();
+    allPoke=d.results.map((p,i)=>({name:p.name,id:i+1}));
+  }catch(e){}
+}
+
+async function showPoke(name){
+  document.getElementById('card').innerHTML='<div class="loading-state"><div class="loader"></div>Loading Pokémon data...</div>';
+  try{
+    const r=await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`);
+    const d=await r.json();
+    const types=d.types.map(t=>t.type.name);
+    const pid=d.id;
+    const mult=calcMult(types);
+    const mainColor=(TC[types[0]]||{bg:'#888'}).bg;
+
+    const immune=AT.filter(t=>mult[t]===0);
+    const r025=AT.filter(t=>mult[t]===0.25);
+    const r05=AT.filter(t=>mult[t]===0.5);
+    const w2=AT.filter(t=>mult[t]===2);
+    const w4=AT.filter(t=>mult[t]===4);
+
+    const gs=(n)=>d.stats.find(s=>s.stat.name===n)?.base_stat||0;
+    const stats=[
+      {l:'HP',v:gs('hp'),max:255},
+      {l:'Attack',v:gs('attack'),max:190},
+      {l:'Defense',v:gs('defense'),max:230},
+      {l:'Sp.Atk',v:gs('special-attack'),max:194},
+      {l:'Sp.Def',v:gs('special-defense'),max:230},
+      {l:'Speed',v:gs('speed'),max:200}
+    ];
+    const total=stats.reduce((a,s)=>a+s.v,0);
+
+    const matchups=[
+      w4.length?`<div class="matchup-block"><div class="section-label dblweak-label">Double weak — 4×</div><div class="matchup-row">${w4.map(t=>chip(t,4)).join('')}</div></div>`:'',
+      w2.length?`<div class="matchup-block"><div class="section-label weak-label">Weak — 2×</div><div class="matchup-row">${w2.map(t=>chip(t,2)).join('')}</div></div>`:'',
+      r05.length?`<div class="matchup-block"><div class="section-label resist-label">Resists — 0.5×</div><div class="matchup-row">${r05.map(t=>chip(t,0.5)).join('')}</div></div>`:'',
+      r025.length?`<div class="matchup-block"><div class="section-label resist-label">Double resist — 0.25×</div><div class="matchup-row">${r025.map(t=>chip(t,0.25)).join('')}</div></div>`:'',
+      immune.length?`<div class="matchup-block"><div class="section-label immune-label">Immune — 0×</div><div class="matchup-row">${immune.map(t=>chip(t,0)).join('')}</div></div>`:''
+    ].filter(Boolean).join('');
+
+    document.getElementById('card').innerHTML=`
+      <div class="poke-card">
+        <div class="hero" style="background:${mainColor}22">
+          <div class="hero-bg" style="background:${mainColor}"></div>
+          <div class="hero-circles" style="background:${mainColor}"></div>
+          <div class="hero-num">${fid(pid)}</div>
+          <div class="hero-layout">
+            <div class="hero-info">
+              <div class="hero-name">${fname(name)}</div>
+              <div class="hero-types">${types.map(pill).join('')}</div>
+            </div>
+            <img class="hero-sprite" src="${artwork(pid)}" alt="${name}" onerror="this.src='${sprite(pid)}'"/>
+          </div>
+        </div>
+        <div class="poke-body">
+          <div class="section-label">Base stats</div>
+          <div class="stats-grid">
+            ${stats.map(s=>{
+              const pct=Math.round(Math.min(100,s.v/s.max*100));
+              return `<div class="stat-card">
+                <div class="stat-label">${s.l}</div>
+                <div class="stat-value">${s.v}</div>
+                <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${pct}%;background:${statColor(pct)}"></div></div>
+              </div>`;
+            }).join('')}
+          </div>
+          <div class="total-badge">Base stat total <strong>${total}</strong></div>
+          <div class="sep"></div>
+          <div class="section-label" style="margin-bottom:14px">Type matchups</div>
+          ${matchups||'<p style="color:var(--muted);font-size:13px">No notable matchups</p>'}
+        </div>
+      </div>`;
+  }catch(e){
+    document.getElementById('card').innerHTML='<div class="empty-state"><h2>Failed to load</h2><p>Check your connection and try again.</p></div>';
+  }
+}
+
+const searchEl=document.getElementById('search');
+const dd=document.getElementById('dropdown');
+
+searchEl.addEventListener('input',()=>{
+  clearTimeout(dbt);
+  dbt=setTimeout(()=>{
+    const q=searchEl.value.toLowerCase().trim();
+    if(!q){dd.style.display='none';return;}
+    const num=parseInt(q);
+    let matches=isNaN(num)?allPoke.filter(p=>p.name.includes(q)).slice(0,20):allPoke.filter(p=>p.id===num);
+    if(!matches.length){dd.style.display='none';return;}
+    dd.innerHTML=matches.map(p=>{
+      const dotStyle=`width:8px;height:8px;border-radius:50%;background:${(TC[p.name]||{bg:'#888'}).bg}`;
+      return `<div class="dd-item" data-name="${p.name}">
+        <img class="dd-img" src="${sprite(p.id)}" alt="${p.name}" loading="lazy"/>
+        <span class="dd-name">${fname(p.name)}</span>
+        <div class="dd-right"><span class="dd-num">${fid(p.id)}</span></div>
+      </div>`;
+    }).join('');
+    dd.style.display='block';
+    dd.querySelectorAll('.dd-item').forEach(el=>{
+      el.addEventListener('click',()=>{
+        const n=el.dataset.name;
+        searchEl.value=fname(n);
+        dd.style.display='none';
+        showPoke(n);
+      });
+    });
+  },140);
+});
+
+document.addEventListener('click',e=>{if(!e.target.closest('.search-wrap'))dd.style.display='none';});
+load();
+</script>
+</body>
+</html>
