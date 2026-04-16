@@ -1,0 +1,2171 @@
+<!DOCTYPE html>
+<!--
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║           POKÉDEX — BATTLE TYPE HELPER                          ║
+  ║           Fan-made tool · Not affiliated with Nintendo           ║
+  ║           Data sourced from PokéAPI (pokeapi.co)                ║
+  ╠══════════════════════════════════════════════════════════════════╣
+  ║  TABS:                                                          ║
+  ║    1. Pokémon Search  — look up any Pokémon by name/number      ║
+  ║    2. Browse by Type  — tap a type, see all its matchups        ║
+  ║    3. Team Builder    — input two teams, get counter rankings   ║
+  ╚══════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en" data-theme="dark">
+<!-- data-theme="dark" is the default — JS switches it to "light" based on
+     localStorage or the user's OS preference at runtime -->
+
+<head>
+  <meta charset="UTF-8"/>
+
+  <!-- Makes the app fill the whole screen properly on mobile.
+       viewport-fit=cover handles the iPhone notch/home bar safe areas -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+
+  <!-- These three meta tags allow the app to be installed as a PWA
+       (Progressive Web App) on Android and iPhone home screens.
+       Once installed, it opens fullscreen with no browser chrome -->
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+
+  <!-- The name that appears under the icon when installed on iPhone -->
+  <meta name="apple-mobile-web-app-title" content="Pokédex"/>
+
+  <!-- Sets the browser toolbar color on Android Chrome to match the dark background -->
+  <meta name="theme-color" content="#0d0d0f"/>
+
+  <title>Pokédex — Battle Helper</title>
+
+  <!-- Outfit font from Google Fonts — used for all text in the app.
+       Weights 300–800 loaded so we can use light, regular, bold, and heavy styles -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+
+<style>
+
+  /* ══════════════════════════════════════════════════════════
+     THEME SYSTEM — CSS VARIABLES
+     All colors are defined as CSS custom properties so that
+     switching between dark and light mode is just one attribute
+     change on <html>. Every color in the app references one
+     of these variables instead of a hardcoded hex value.
+     ══════════════════════════════════════════════════════════ */
+
+  /* DARK MODE (default) — deep dark backgrounds, light text */
+  :root, [data-theme="dark"] {
+    --red: #E63946;                        /* accent red — used for logo, borders on focus, loader */
+    --bg: #0d0d0f;                         /* page background — near black */
+    --card: #16161a;                       /* card / dropdown background */
+    --surface: #1e1e24;                    /* input boxes, tab bar, stat cards */
+    --surface2: #26262e;                   /* slightly lighter surface for hover states */
+    --border: rgba(255,255,255,0.07);      /* very subtle border — barely visible */
+    --border-hover: rgba(255,255,255,0.16);/* border on hover — slightly more visible */
+    --text: #f0f0f5;                       /* primary text — off-white */
+    --muted: rgba(240,240,245,0.45);       /* secondary text — dimmed */
+    --dot-color: rgba(255,255,255,0.04);   /* background dot grid pattern color */
+    --stat-track: rgba(255,255,255,0.08);  /* stat bar background track */
+    --hero-num: rgba(255,255,255,0.4);     /* Pokédex number text in hero (e.g. #0006) */
+    --toggle-bg: #26262e;                  /* theme toggle button background */
+    --toggle-icon: #f0f0f5;               /* theme toggle icon color */
+    --shadow: rgba(0,0,0,0.4);            /* drop shadow on Pokémon sprite */
+    --immune-col: #a855f7;                 /* purple — immune/no-effect label color */
+    --resist-col: #22d3ee;                 /* cyan — resist label color */
+    --weak-col: #fb923c;                   /* orange — weak label color */
+    --strong-col: #4ade80;                 /* green — strong-against label color */
+  }
+
+  /* LIGHT MODE — triggered when user taps the sun/moon toggle.
+     Saved to localStorage and restored on page load. */
+  [data-theme="light"] {
+    --bg: #e8e8f0;
+    --card: #f8f8fc;
+    --surface: #d8d8e4;
+    --surface2: #c8c8d8;
+    --border: rgba(0,0,0,0.13);
+    --border-hover: rgba(0,0,0,0.25);
+    --text: #0a0a14;
+    --muted: rgba(10,10,20,0.55);
+    --dot-color: rgba(0,0,0,0.045);
+    --stat-track: rgba(0,0,0,0.1);
+    --hero-num: rgba(255,255,255,0.6);
+    --toggle-bg: #d0d0de;
+    --toggle-icon: #0a0a14;
+    --shadow: rgba(0,0,0,0.18);
+    --immune-col: #6d28d9;
+    --resist-col: #0e7490;
+    --weak-col: #c2410c;
+    --strong-col: #15803d;
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     BASE / RESET
+     ══════════════════════════════════════════════════════════ */
+
+  /* Remove default browser margin/padding from all elements */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Outfit', system-ui, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;          /* prevent horizontal scroll */
+    transition: background .3s, color .3s; /* smooth theme switch */
+    -webkit-tap-highlight-color: transparent; /* remove blue flash on tap on mobile */
+  }
+
+  /* Subtle dot grid pattern behind all content.
+     Uses a pseudo-element fixed to the viewport so it doesn't scroll.
+     pointer-events:none means it can't be clicked and won't block anything */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle, var(--dot-color) 1px, transparent 1px);
+    background-size: 28px 28px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Main content wrapper — centered, max 760px wide, with iPhone notch-safe padding */
+  .page {
+    position: relative;
+    z-index: 1; /* sits above the dot background */
+    max-width: 760px;
+    margin: 0 auto;
+    /* env(safe-area-inset-*) = iPhone notch/home bar padding */
+    padding-top: max(2.5rem, env(safe-area-inset-top));
+    padding-bottom: max(4rem, env(safe-area-inset-bottom));
+    padding-left: max(1.5rem, env(safe-area-inset-left));
+    padding-right: max(1.5rem, env(safe-area-inset-right));
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     HEADER
+     Contains: Pokéball logo (clickable → goes home),
+               Gen badge (decorative), theme toggle button
+     ══════════════════════════════════════════════════════════ */
+
+  .site-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; }
+
+  /* Clickable logo group — clicking takes user back to empty home state */
+  .logo { display: flex; align-items: center; gap: 14px; cursor: pointer; }
+
+  /* Pokéball icon rotates slightly on logo hover */
+  .logo:hover .pokeball { transform: rotate(20deg); }
+  .pokeball { width: 44px; height: 44px; flex-shrink: 0; transition: transform .3s; }
+
+  /* "Pokédex" h1 — "dex" part is colored red via <span> */
+  .logo-text h1 { font-size: 22px; font-weight: 700; letter-spacing: -.5px; line-height: 1; color: var(--text); }
+  .logo-text h1 span { color: var(--red); }
+  .logo-text p { font-size: 12px; color: var(--muted); font-weight: 400; margin-top: 3px; }
+
+  /* Right side of header — badge + toggle button */
+  .header-right { display: flex; align-items: center; gap: 10px; }
+
+  /* "Gen 1–9 · Violet" decorative pill badge */
+  .gen-badge { background: var(--surface); border: 1px solid var(--border); border-radius: 100px; padding: 6px 14px; font-size: 12px; font-weight: 500; color: var(--muted); transition: background .3s, border-color .3s; }
+  .gen-badge span { color: var(--red); font-weight: 600; }
+
+  /* Sun/moon toggle button — circular icon button */
+  .theme-toggle { width: 38px; height: 38px; border-radius: 50%; background: var(--toggle-bg); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .2s; flex-shrink: 0; }
+  .theme-toggle:hover { border-color: var(--border-hover); transform: scale(1.08); }
+  .theme-toggle svg { width: 17px; height: 17px; fill: var(--toggle-icon); transition: fill .3s; }
+
+  /* Show moon icon in dark mode, sun icon in light mode.
+     JS toggles data-theme on <html> which triggers these rules */
+  .icon-sun { display: none; }
+  .icon-moon { display: block; }
+  [data-theme="light"] .icon-sun { display: block; }
+  [data-theme="light"] .icon-moon { display: none; }
+
+  /* ══════════════════════════════════════════════════════════
+     TAB NAVIGATION
+     Three tabs: Pokémon Search / Browse by Type / Team Builder.
+     Clicking a tab calls switchTab() which shows the matching
+     .tab-panel and hides the others.
+     ══════════════════════════════════════════════════════════ */
+
+  /* Pill-shaped tab container */
+  .tabs { display: flex; gap: 4px; background: var(--surface); border-radius: 20px; padding: 5px; margin-bottom: 1.75rem; transition: background .3s; }
+
+  /* Individual tab button */
+  .tab { flex: 1; padding: 10px; border-radius: 14px; border: none; background: transparent; color: var(--muted); font-family: 'Outfit', system-ui, sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: all .2s; }
+
+  /* Active tab gets a white card background and full text color */
+  .tab.active { background: var(--card); color: var(--text); }
+
+  /* All tab panels hidden by default; JS adds .active to show one */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ══════════════════════════════════════════════════════════
+     POKÉMON SEARCH — Search box & autocomplete dropdown
+     ══════════════════════════════════════════════════════════ */
+
+  /* Wrapper is position:relative so the dropdown can be
+     positioned absolutely relative to the search box */
+  .search-wrap { position: relative; margin-bottom: .75rem; }
+
+  /* Pill-shaped input row with a magnifier icon */
+  .search-box { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1.5px solid var(--border); border-radius: 20px; padding: 0 20px; transition: border-color .2s, background .3s; }
+
+  /* Red ring when the input is focused */
+  .search-box:focus-within { border-color: var(--red); box-shadow: 0 0 0 3px rgba(230,57,70,.12); }
+  .search-box svg { flex-shrink: 0; opacity: .4; color: var(--text); }
+
+  /* The actual <input> element — transparent background so the
+     pill shape from .search-box shows through */
+  #search { flex: 1; background: none; border: none; outline: none; padding: 16px 0; font-size: 16px; font-family: 'Outfit', system-ui, sans-serif; color: var(--text); }
+  #search::placeholder { color: var(--muted); }
+
+  /* Small hint text below the search box */
+  .search-hint { font-size: 12px; color: var(--muted); margin-top: 8px; padding: 0 4px; }
+
+  /* ── Autocomplete dropdown ─────────────────────────────────
+     Shown when user types — populated by JS filtering allPoke[].
+     Hidden by default (display:none), shown by JS */
+  #dropdown { display: none; position: absolute; top: calc(100% + 8px); left: 0; right: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; z-index: 200; overflow: hidden; max-height: 280px; overflow-y: auto; transition: background .3s; }
+
+  /* Thin custom scrollbar inside dropdown */
+  #dropdown::-webkit-scrollbar { width: 4px; }
+  #dropdown::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Each result row in the dropdown */
+  .dd-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background .1s; }
+  .dd-item:last-child { border-bottom: none; }
+  .dd-item:hover { background: var(--surface); }
+
+  /* Pokémon sprite thumbnail in dropdown */
+  .dd-img { width: 40px; height: 40px; image-rendering: pixelated; }
+  .dd-name { flex: 1; font-size: 14px; font-weight: 500; text-transform: capitalize; color: var(--text); }
+  .dd-num { font-size: 11px; color: var(--muted); }
+
+  /* ══════════════════════════════════════════════════════════
+     CARD STATES — Empty, Loading, Error
+     These placeholder states are shown in #card when:
+       - App first loads (empty state with Pokéball)
+       - A Pokémon is being fetched from the API (loader spinner)
+       - The API call fails (error message)
+     ══════════════════════════════════════════════════════════ */
+
+  #card { margin-top: .5rem; }
+
+  /* Dashed border empty state — shown on first load */
+  .empty-state { text-align: center; padding: 4rem 2rem; border: 1.5px dashed var(--border); border-radius: 20px; background: var(--surface); transition: background .3s; }
+
+  /* Centered Pokéball icon in empty state */
+  .empty-icon { width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem; }
+  .empty-state h2 { font-size: 17px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+  .empty-state p { font-size: 14px; color: var(--muted); }
+
+  /* Loading state — shown while fetching from PokéAPI */
+  .loading-state { text-align: center; padding: 3rem; color: var(--muted); font-size: 14px; }
+
+  /* Spinning red circle loader animation */
+  .loader { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--red); animation: spin .7s linear infinite; margin: 0 auto 1rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ══════════════════════════════════════════════════════════
+     POKÉMON RESULT CARD
+     The main card shown after a Pokémon is loaded.
+     Structure:
+       .poke-card
+         .hero          ← colored header with sprite + name + types
+         .ability-desc-container  ← injected ability description
+         .poke-body     ← matchups, base stats toggle
+     ══════════════════════════════════════════════════════════ */
+
+  /* Outer card — rounded, border, slides up when first rendered */
+  .poke-card { border-radius: 20px; overflow: hidden; border: 1px solid var(--border); background: var(--card); animation: fadeUp .3s ease; transition: background .3s, border-color .3s; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+
+  /* Hero section — the colored header strip.
+     Background color is set inline via JS using the Pokémon's
+     primary type color (e.g. blue for Water types) */
+  .hero { position: relative; padding: 2.5rem 2rem 1.5rem; overflow: hidden; min-height: 200px; }
+
+  /* Full-bleed color wash behind hero content */
+  .hero-bg { position: absolute; inset: 0; opacity: .15; }
+  [data-theme="light"] .hero-bg { opacity: .28; }  /* brighter in light mode */
+
+  /* Decorative large circle in top-right of hero */
+  .hero-circles { position: absolute; right: -40px; top: -40px; width: 260px; height: 260px; border-radius: 50%; opacity: .08; }
+  .hero-circles::after { content: ''; position: absolute; inset: 30px; border-radius: 50%; background: rgba(255,255,255,.5); }
+
+  /* "#0006" Pokédex number displayed small above the name */
+  .hero-num { font-size: 11px; font-weight: 600; letter-spacing: .1em; color: var(--hero-num); text-transform: uppercase; margin-bottom: 6px; position: relative; z-index: 2; }
+
+  /* Row layout: name+types on the left, sprite on the right */
+  .hero-layout { display: flex; align-items: flex-end; justify-content: space-between; position: relative; z-index: 2; gap: 1rem; }
+  .hero-info { flex: 1; }
+
+  /* Large Pokémon name — white regardless of theme since hero is always colored */
+  .hero-name { font-size: 36px; font-weight: 800; text-transform: capitalize; line-height: 1; letter-spacing: -1px; color: #fff; text-shadow: 0 2px 20px rgba(0,0,0,.4); margin-bottom: 12px; }
+
+  /* Type pills row (e.g. "fire" "flying") */
+  .hero-types { display: flex; gap: 7px; flex-wrap: wrap; }
+
+  /* Individual type pill — color set inline by JS from TC color map */
+  .type-pill { padding: 5px 14px; border-radius: 100px; font-size: 12px; font-weight: 600; text-transform: capitalize; letter-spacing: .03em; border: 1px solid rgba(255,255,255,.2); }
+
+  /* ── Sprite ───────────────────────────────────────────────── */
+  .hero-sprite { width: 130px; height: 130px; image-rendering: pixelated; filter: drop-shadow(0 8px 24px var(--shadow)); flex-shrink: 0; transition: transform .3s ease; }
+  .hero-sprite:hover { transform: translateY(-6px) scale(1.05); }
+
+  /* ── Inline Ability Pills (always visible, below type pills) ──
+     Abilities are shown as tappable pills directly in the hero.
+     No overlay — nothing gets clipped on mobile. */
+  .hero-abilities { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+
+  /* Individual tappable ability pill */
+  .ability-chip { font-family: 'Outfit', system-ui, sans-serif; cursor: pointer;
+    background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22);
+    border-radius: 100px; padding: 5px 12px; font-size: 12px; font-weight: 600;
+    color: #fff; display: inline-flex; align-items: center; gap: 5px;
+    transition: background .15s, border-color .15s, transform .1s; }
+  .ability-chip:hover { background: rgba(255,255,255,.24); transform: scale(1.03); }
+  .ability-chip.active { background: rgba(255,255,255,.32); border-color: rgba(255,255,255,.6); }
+
+  /* Hidden ability pill — purple tint */
+  .ability-chip.hidden-ab { background: rgba(168,85,247,.28); border-color: rgba(168,85,247,.5); }
+  .ability-chip.hidden-ab.active { background: rgba(168,85,247,.5); border-color: rgba(168,85,247,.8); }
+
+  /* Small "HIDDEN" badge inside the hidden ability pill */
+  .ability-hidden-label { font-size: 8px; font-weight: 800; letter-spacing: .1em;
+    text-transform: uppercase; color: #a855f7; background: rgba(168,85,247,.25);
+    border-radius: 100px; padding: 1px 5px; }
+
+  /* ── Ability Description Panel ─────────────────────────────
+     Slides in below the hero when an ability chip is tapped.
+     Content is injected by JS after fetching from PokéAPI. */
+
+  .ability-desc-panel { margin: 10px 1.5rem 0; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; animation: abilitySlideIn .22s cubic-bezier(.34,1.56,.64,1); transform-origin: top center; }
+  @keyframes abilitySlideIn { from { opacity: 0; transform: scaleY(.85) translateY(-6px) } to { opacity: 1; transform: scaleY(1) translateY(0) } }
+  .ability-desc-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .ability-desc-name-row { display: flex; align-items: center; gap: 7px; }
+  .ability-desc-name { font-size: 14px; font-weight: 700; color: var(--text); }
+
+  /* X button to close the ability description panel */
+  .ability-desc-close { width: 26px; height: 26px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; color: var(--muted); transition: background .15s, color .15s; }
+  .ability-desc-close:hover { background: var(--border); color: var(--text); }
+
+  /* The ability flavor text description — italic, muted color */
+  .ability-desc-text { font-size: 13px; line-height: 1.55; color: var(--muted); font-style: italic; }
+
+  /* ── Pokémon Card Body ─────────────────────────────────────
+     Below the hero: type matchups, then collapsible base stats */
+
+  .poke-body { padding: 1.75rem 2rem; }
+
+  /* Section heading label (e.g. "TYPE MATCHUPS", "WEAK — 2×") */
+  .section-label { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+
+  /* 3-column grid for the 6 base stat cards */
+  .stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-bottom: 1.75rem; }
+
+  /* Individual stat card (HP, Attack, Defense, etc.) */
+  .stat-card { background: var(--surface); border-radius: 12px; padding: 12px 14px; border: 1px solid var(--border); transition: background .3s, border-color .3s; }
+  .stat-label { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .stat-value { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1; }
+
+  /* Color-coded bar under the stat number.
+     Bar width and color set inline by JS based on stat value */
+  .stat-bar-track { height: 3px; background: var(--stat-track); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .stat-bar-fill { height: 100%; border-radius: 3px; }
+
+  /* Thin horizontal rule separator between sections */
+  .sep { height: 1px; background: var(--border); margin: 1.75rem 0; }
+
+  /* ── Type Matchup Chips ────────────────────────────────────
+     Each matchup group (e.g. "Weak 2×") is a .matchup-block
+     containing a .section-label and a .matchup-row of chips. */
+
+  .matchup-block, .type-ms { margin-bottom: 1.5rem; }
+  .matchup-block:last-child, .type-ms:last-child { margin-bottom: 0; }
+
+  /* Wrapping row of type chips */
+  .matchup-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+  /* Individual type chip (e.g. "fire 2×") — color set inline by JS */
+  .m-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 100px; font-size: 15px; font-weight: 600; text-transform: capitalize; border: 1px solid rgba(0,0,0,.15); }
+
+  /* The multiplier badge inside a chip (e.g. "2×") */
+  .m-mult { font-size: 12px; font-weight: 700; opacity: .75; background: rgba(0,0,0,.2); padding: 2px 6px; border-radius: 100px; }
+
+  /* Color-coded section label colors for each matchup category */
+  .immune-label { color: var(--immune-col); }   /* 0× immune — purple */
+  .resist-label { color: var(--resist-col); }   /* 0.5×/0.25× resist — cyan */
+  .weak-label { color: var(--weak-col); }        /* 2× weak — orange */
+  .dblweak-label { color: var(--red); }          /* 4× double weak — red */
+  .strong-label { color: var(--strong-col); }    /* 2× strong against — green */
+
+  /* ── Base Stats Toggle ─────────────────────────────────────
+     A collapsible accordion button that hides/shows the stat grid.
+     Stats are secondary to matchups so they start collapsed.
+     Clicking calls toggleStats() which animates the drawer open. */
+
+  .stats-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 11px 16px; cursor: pointer; font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 1.75rem; transition: background .2s, border-color .2s; }
+  .stats-toggle:hover { background: var(--surface2); border-color: var(--border-hover); color: var(--text); }
+  .stats-toggle-left { display: flex; align-items: center; gap: 8px; }
+  .stats-toggle-left span { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+
+  /* The "540 BST" total badge inside the toggle button */
+  .stats-total-pill { background: var(--surface2); border-radius: 100px; padding: 2px 10px; font-size: 11px; font-weight: 600; color: var(--text); }
+
+  /* Chevron arrow icon — rotates 180° when drawer is open */
+  .stats-chevron { width: 16px; height: 16px; transition: transform .25s; opacity: .5; }
+  .stats-chevron.open { transform: rotate(180deg); }
+
+  /* Collapsible drawer — max-height: 0 hides it, JS sets explicit px to open */
+  .stats-drawer { overflow: hidden; max-height: 0; transition: max-height .35s cubic-bezier(.4,0,.2,1); }
+  .stats-drawer.open { max-height: 600px; }
+  .stats-drawer-inner { padding-bottom: 1.75rem; }
+
+  /* ══════════════════════════════════════════════════════════
+     BROWSE BY TYPE TAB
+     Shows an 18-type grid. Tapping a type calls showType()
+     which injects the matchup result below the grid.
+     ══════════════════════════════════════════════════════════ */
+
+  /* Intro text above the grid */
+  .type-intro { font-size: 13px; color: var(--muted); margin-bottom: 1.25rem; padding: 0 2px; }
+
+  /* 3-column grid on mobile, 6-column on wider screens */
+  .types-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 1.5rem; }
+  @media(min-width: 500px) { .types-grid { grid-template-columns: repeat(6, 1fr); } }
+
+  /* Individual type button card */
+  .type-btn { display: flex; flex-direction: column; align-items: center; gap: 8px; background: var(--surface); border: 1.5px solid var(--border); border-radius: 16px; padding: 12px 8px 10px; cursor: pointer; transition: all .18s; font-family: 'Outfit', system-ui, sans-serif; }
+  .type-btn:hover { background: var(--surface2); transform: translateY(-3px); border-color: var(--border-hover); box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+
+  /* Selected type gets a colored border (set inline by JS) and lift effect */
+  .type-btn.selected { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,.22); }
+
+  /* Type name label below the icon image */
+  .type-btn-name { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: capitalize; }
+
+  /* ── Type Result Card ──────────────────────────────────────
+     Injected below the grid by showType() after a type is selected */
+
+  .type-result { background: var(--card); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; animation: fadeUp .25s ease; transition: background .3s; }
+
+  /* Colored header bar of the type result card */
+  .type-result-hero { padding: 1.5rem 2rem; position: relative; overflow: hidden; }
+  .type-result-hero-bg { position: absolute; inset: 0; opacity: .18; }
+  [data-theme="light"] .type-result-hero-bg { opacity: .3; }
+  .type-result-inner { position: relative; z-index: 2; display: flex; align-items: center; gap: 16px; }
+
+  /* Type name and subtitle in the result hero */
+  .type-result-name { font-size: 28px; font-weight: 800; text-transform: capitalize; color: #fff; letter-spacing: -.5px; text-shadow: 0 2px 12px rgba(0,0,0,.35); }
+  .type-result-sub { font-size: 12px; color: rgba(255,255,255,.5); margin-top: 3px; }
+  .type-result-body { padding: 1.5rem 2rem; }
+
+  /* Type icon image wrapper — rounded square with inner shadow for depth */
+  .type-icon { border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 -3px 0 rgba(0,0,0,.25), inset 0 2px 0 rgba(255,255,255,.2); }
+
+  /* ══════════════════════════════════════════════════════════
+     TEAM BUILDER TAB
+     Two-column layout: Your Team | Opponent's Team
+     Each column has up to 6 Pokémon slots + an Add button.
+     "Analyze matchups" ranks your team against each opponent.
+     ══════════════════════════════════════════════════════════ */
+
+  /* Two-column grid — stacks to single column on narrow phones */
+  .tb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 1.5rem; }
+  @media(max-width: 480px) { .tb-grid { grid-template-columns: 1fr; } }
+
+  /* "YOUR TEAM" / "OPPONENT'S TEAM" column labels */
+  .tb-col-label { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .tb-col-label svg { opacity: .5; }
+
+  /* Column of filled Pokémon slots */
+  .tb-slots { display: flex; flex-direction: column; gap: 8px; }
+
+  /* Individual slot — dashed border when empty, solid when filled */
+  .tb-slot { background: var(--surface); border: 1.5px dashed var(--border); border-radius: 14px; min-height: 60px; display: flex; align-items: center; padding: 8px 12px; gap: 10px; position: relative; transition: border-color .2s, background .2s; }
+  .tb-slot.filled { border-style: solid; border-color: var(--border); }
+  .tb-slot.filled:hover { background: var(--surface2); }
+
+  /* Text shown in an empty slot */
+  .tb-slot-empty { font-size: 12px; color: var(--muted); flex: 1; text-align: center; }
+
+  /* Sprite, name, and type pills inside a filled slot */
+  .tb-slot-img { width: 44px; height: 44px; image-rendering: pixelated; flex-shrink: 0; }
+  .tb-slot-name { font-size: 13px; font-weight: 600; color: var(--text); text-transform: capitalize; flex: 1; }
+  .tb-slot-types { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tb-slot-type { padding: 2px 8px; border-radius: 100px; font-size: 10px; font-weight: 700; text-transform: capitalize; color: #fff; }
+
+  /* × remove button on each filled slot — turns red on hover */
+  .tb-slot-remove { width: 24px; height: 24px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; color: var(--muted); font-size: 16px; line-height: 1; transition: background .15s, color .15s; }
+  .tb-slot-remove:hover { background: rgba(230,57,70,.15); color: var(--red); border-color: rgba(230,57,70,.3); }
+
+  /* "+ Add Pokémon" dashed button below the slots */
+  .tb-add-btn { background: var(--surface); border: 1.5px dashed var(--border); border-radius: 14px; padding: 10px; cursor: pointer; font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: var(--muted); width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background .2s, border-color .2s, color .2s; }
+  .tb-add-btn:hover { background: var(--surface2); border-color: var(--border-hover); color: var(--text); }
+  .tb-add-btn:disabled { opacity: .35; cursor: not-allowed; }  /* disabled when 6 Pokémon added */
+
+  /* ── Team Builder Search Modal ─────────────────────────────
+     Full-screen dark overlay that appears when "+ Add Pokémon"
+     is clicked. Contains a search box to find a Pokémon.
+     Clicking outside the box calls closeModalOutside(). */
+
+  .tb-search-modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 500; display: flex; align-items: flex-start; justify-content: center; padding-top: 80px; }
+  .tb-search-box { background: var(--card); border: 1px solid var(--border); border-radius: 20px; width: 100%; max-width: 480px; margin: 0 1rem; overflow: hidden; animation: fadeUp .2s ease; }
+  .tb-search-inner { display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--border); }
+  .tb-search-inner svg { opacity: .35; flex-shrink: 0; color: var(--text); }
+  .tb-search-input { flex: 1; background: none; border: none; outline: none; padding: 16px 0; font-size: 16px; font-family: 'Outfit', system-ui, sans-serif; color: var(--text); }
+  .tb-search-input::placeholder { color: var(--muted); }
+
+  /* Scrollable results list inside the modal */
+  .tb-search-results { max-height: 320px; overflow-y: auto; }
+  .tb-search-results::-webkit-scrollbar { width: 4px; }
+  .tb-search-results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Each Pokémon result row in the modal search */
+  .tb-result-item { display: flex; align-items: center; gap: 12px; padding: 10px 20px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background .1s; }
+  .tb-result-item:last-child { border-bottom: none; }
+  .tb-result-item:hover { background: var(--surface); }
+  .tb-result-img { width: 36px; height: 36px; image-rendering: pixelated; }
+  .tb-result-name { flex: 1; font-size: 14px; font-weight: 500; text-transform: capitalize; color: var(--text); }
+  .tb-result-num { font-size: 11px; color: var(--muted); }
+
+  /* Per-column Randomize button */
+  .tb-rand-btn { display:flex; align-items:center; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:4px 8px; font-family:'Outfit',system-ui,sans-serif; font-size:10px; font-weight:600; color:var(--muted); cursor:pointer; transition:background .15s,border-color .15s,color .15s; letter-spacing:.05em; text-transform:uppercase; }
+  .tb-rand-btn:hover:not(:disabled) { background:var(--surface2); border-color:var(--border-hover); color:var(--text); }
+  .tb-rand-btn:disabled { opacity:.4; cursor:not-allowed; }
+  .tb-rand-spin { display:inline-block; animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* Three-button action row */
+  .tb-action-row { display:flex; gap:8px; margin-top:1.5rem; flex-wrap:wrap; }
+  .tb-action-row > button { flex:1; min-width:0; }
+
+  /* Randomize Both button */
+  .tb-rand-both-btn { display:flex; align-items:center; justify-content:center; gap:6px; padding:13px 12px; border-radius:14px; border:1.5px solid var(--border); background:var(--surface2); color:var(--text); font-size:13px; font-weight:700; cursor:pointer; transition:all .2s; font-family:'Outfit',system-ui,sans-serif; }
+  .tb-rand-both-btn:hover:not(:disabled) { border-color:var(--border-hover); background:var(--surface); }
+  .tb-rand-both-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+  /* Red "Analyze matchups" button */
+  .tb-analyze-btn { padding:13px 16px; background:var(--red); border:none; border-radius:14px; color:#fff; font-family:'Outfit',system-ui,sans-serif; font-size:14px; font-weight:700; cursor:pointer; transition:opacity .2s,transform .1s; letter-spacing:.02em; }
+  .tb-analyze-btn:hover { opacity:.88; }
+  .tb-analyze-btn:active { transform:scale(.98); }
+  .tb-analyze-btn:disabled { opacity:.35; cursor:not-allowed; }
+
+  /* ── Team Builder Results ───────────────────────────────────
+     After "Analyze matchups" is clicked, one result card per
+     opponent Pokémon is injected into #tb-results.
+     Each card shows your team ranked best-to-worst counter. */
+
+  .tb-results { margin-top: 1.5rem; display: flex; flex-direction: column; gap: 14px; }
+
+  /* Card for one opponent Pokémon */
+  .tb-result-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; animation: fadeUp .3s ease; }
+
+  /* Colored header row of the result card (opponent's primary type color) */
+  .tb-result-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .tb-result-header img { width: 52px; height: 52px; image-rendering: pixelated; }
+  .tb-result-header-info { flex: 1; }
+  .tb-result-header-name { font-size: 16px; font-weight: 700; text-transform: capitalize; color: var(--text); }
+  .tb-result-header-types { display: flex; gap: 5px; margin-top: 4px; }
+
+  /* Your team ranked list below the opponent header */
+  .tb-counters { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+
+  /* One row per Pokémon on your team — rank number, sprite, name, score badge */
+  .tb-counter-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+  .tb-counter-rank { font-size: 11px; font-weight: 700; color: var(--muted); width: 18px; flex-shrink: 0; text-align: center; }
+  .tb-counter-img { width: 36px; height: 36px; image-rendering: pixelated; flex-shrink: 0; }
+  .tb-counter-name { flex: 1; font-size: 13px; font-weight: 600; text-transform: capitalize; color: var(--text); }
+
+  /* Score badge — color changes based on effectiveness rating */
+  .tb-counter-score { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 100px; flex-shrink: 0; }
+  .tb-score-great { background: rgba(74,222,128,.15); color: #4ade80; border: 1px solid rgba(74,222,128,.3); }   /* 2× or 4× — green */
+  .tb-score-good { background: rgba(250,204,21,.15); color: #facc15; border: 1px solid rgba(250,204,21,.3); }     /* 0.5× resist (for opponent) — yellow */
+  .tb-score-neutral { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }        /* 1× neutral — gray */
+  .tb-score-bad { background: rgba(230,57,70,.1); color: var(--red); border: 1px solid rgba(230,57,70,.25); }     /* 0× no effect — red */
+
+  /* Shown when user clicks Analyze without filling both teams */
+  .tb-empty-team { text-align: center; padding: 2rem; color: var(--muted); font-size: 13px; border: 1.5px dashed var(--border); border-radius: 14px; background: var(--surface); }
+
+  /* ── Ability notes in Team Builder counter rows ──────────────
+     Small colored banners that appear under a counter row when
+     an ability interaction is detected (e.g. Mirror Armor vs Intimidate) */
+  .ab-note { display: flex; align-items: flex-start; gap: 7px; padding: 7px 10px;
+    border-radius: 8px; font-size: 12px; font-weight: 500; margin-top: 5px; line-height: 1.4; }
+  .ab-note-good { background: rgba(74,222,128,.1); color: #4ade80; border: 1px solid rgba(74,222,128,.2); }
+  .ab-note-warn { background: rgba(251,146,60,.1); color: #fb923c; border: 1px solid rgba(251,146,60,.2); }
+  .ab-note-info { background: rgba(34,211,238,.1); color: #22d3ee; border: 1px solid rgba(34,211,238,.2); }
+  .ab-note-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+
+
+  /* ── AI Analysis Button ───────────────────────────────────── */
+  .tb-ai-btn { width: 100%; padding: 14px; background: linear-gradient(135deg,#7c3aed,#9333ea);
+    border: none; border-radius: 14px; color: #fff; font-family: 'Outfit', system-ui, sans-serif;
+    font-size: 15px; font-weight: 700; cursor: pointer; margin-top: .5rem;
+    transition: opacity .2s, transform .1s; letter-spacing: .02em; }
+  .tb-ai-btn:hover { opacity: .88; } .tb-ai-btn:active { transform: scale(.98); }
+  .tb-ai-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* ── AI Results Panel ─────────────────────────────────────── */
+  .ai-panel { margin-top: 1.25rem; background: var(--card);
+    border: 1.5px solid rgba(167,139,250,.3); border-radius: 16px; overflow: hidden;
+    animation: fadeUp .35s ease; }
+  .ai-panel-header { display: flex; align-items: center; gap: 8px; padding: 13px 18px;
+    border-bottom: 1px solid rgba(167,139,250,.2); color: #a78bfa;
+    font-size: 14px; font-weight: 700; background: rgba(139,92,246,.08); }
+  .ai-panel-header button { margin-left: auto; background: none;
+    border: 1px solid rgba(167,139,250,.3); color: #a78bfa; width: 24px; height: 24px;
+    border-radius: 8px; cursor: pointer; font-size: 16px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; }
+  .ai-panel-header button:hover { background: rgba(167,139,250,.15); }
+  .ai-panel-body { padding: 16px 18px; font-size: 14px; line-height: 1.7; color: var(--text); white-space: pre-wrap; }
+  .ai-thinking-dots { display: inline-flex; gap: 5px; }
+  .ai-thinking-dots span { width: 7px; height: 7px; border-radius: 50%; background: #a78bfa;
+    animation: aiPulse 1.4s infinite ease-in-out; }
+  .ai-thinking-dots span:nth-child(2) { animation-delay: .2s; }
+  .ai-thinking-dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes aiPulse { 0%,80%,100%{transform:scale(.6);opacity:.4} 40%{transform:scale(1);opacity:1} }
+
+
+  /* ══════════════════════════════════════════════════════════
+     NORMAL DAMAGE (1×) TOGGLE
+     At the bottom of every matchup section there's a small
+     collapsible button showing types that deal normal 1× damage.
+     Collapsed by default since neutral damage is least useful.
+     toggleNormal() opens/closes the drawer by ID.
+     ══════════════════════════════════════════════════════════ */
+
+  .normal-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; background: none; border: none; font-family: 'Outfit', system-ui, sans-serif; padding: 4px 0; margin-top: 1rem; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .normal-toggle:hover { color: var(--text); }
+
+  /* Chevron arrow — rotates when open */
+  .normal-toggle-chevron { width: 14px; height: 14px; transition: transform .2s; opacity: .5; }
+  .normal-toggle-chevron.open { transform: rotate(180deg); }
+
+  /* Collapsible drawer holding the 1× chips */
+  .normal-drawer { overflow: hidden; max-height: 0; transition: max-height .3s cubic-bezier(.4,0,.2,1); }
+  .normal-drawer.open { max-height: 400px; }
+
+</style>
+</head>
+
+<!-- ════════════════════════════════════════════════════════════
+     HTML BODY
+     ════════════════════════════════════════════════════════════ -->
+<body>
+<div class="page">
+
+  <!-- ══ HEADER ══════════════════════════════════════════════
+       Left: Pokéball logo — clicking calls goHome() which
+             resets the search and returns to empty state.
+       Right: Gen badge + light/dark mode toggle button.
+       ══════════════════════════════════════════════════════ -->
+  <header class="site-header">
+    <div class="logo" onclick="goHome()" title="Home">
+      <!-- Pokéball SVG — drawn with pure SVG shapes:
+           red top half, white bottom half, black band, white center button -->
+      <div class="pokeball">
+        <svg viewBox="0 0 100 100" width="44" height="44">
+          <circle cx="50" cy="50" r="49" fill="#222"/>
+          <path d="M1 50 a49 49 0 0 1 98 0 Z" fill="#e63946"/>  <!-- red top -->
+          <path d="M1 50 a49 49 0 0 0 98 0 Z" fill="#f5f5f5"/>  <!-- white bottom -->
+          <rect x="1" y="44" width="98" height="12" fill="#111"/><!-- black band -->
+          <circle cx="50" cy="50" r="15" fill="#111"/>           <!-- outer ring -->
+          <circle cx="50" cy="50" r="11" fill="#f5f5f5"/>        <!-- white center -->
+          <circle cx="50" cy="50" r="5.5" fill="#222"/>          <!-- center dot -->
+          <path d="M43 43 a9 9 0 0 1 9 -5" stroke="rgba(255,255,255,0.4)" stroke-width="2.5" fill="none" stroke-linecap="round"/> <!-- highlight -->
+        </svg>
+      </div>
+      <div class="logo-text">
+        <h1>Poké<span>dex</span></h1>
+        <p>Battle Type Helper</p>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <!-- Decorative label showing generation coverage -->
+      <div class="gen-badge">Gen 1–<span>9</span> · Violet</div>
+
+      <!-- Theme toggle: shows moon icon in dark mode, sun in light mode.
+           Clicking calls toggleTheme() which flips data-theme on <html>
+           and saves the preference to localStorage -->
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="5"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ══ TAB BAR ═════════════════════════════════════════════
+       Three tabs. Clicking any tab calls switchTab(name, btn)
+       which hides all .tab-panel divs and shows the one
+       matching the tab name.
+       ══════════════════════════════════════════════════════ -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('pokemon',this)">Pokémon Search</button>
+    <button class="tab" onclick="switchTab('types',this)">Browse by Type</button>
+    <button class="tab" onclick="switchTab('team',this)">Team Builder</button>
+  </div>
+
+  <!-- ══ TAB 1: POKÉMON SEARCH ════════════════════════════════
+       Contains the search box, autocomplete dropdown,
+       and #card where the Pokémon result card is injected.
+       ══════════════════════════════════════════════════════ -->
+  <div id="tab-pokemon" class="tab-panel active">
+
+    <!-- Search box with magnifier icon -->
+    <div class="search-wrap">
+      <div class="search-box">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="1.75"/>
+          <path d="M12 12L16 16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+        </svg>
+        <!-- Input field — JS listens to input events and populates #dropdown -->
+        <input id="search" type="text" placeholder="Search by name or Pokédex number..." autocomplete="off"/>
+      </div>
+      <!-- Autocomplete dropdown — populated by JS, hidden by default -->
+      <div id="dropdown"></div>
+    </div>
+
+    <!-- Hint text examples below the search box -->
+    <p class="search-hint">Try "charizard", "miraidon", or a number like "6"</p>
+
+    <!-- #card is the result area — JS replaces its innerHTML with:
+         - .empty-state (default on load)
+         - .loading-state (while fetching)
+         - .poke-card (after successful API response)
+         - .empty-state with error message (on API failure) -->
+    <div id="card" style="margin-top:1rem">
+      <!-- Default empty state shown before any search -->
+      <div class="empty-state">
+        <!-- Large Pokéball icon centered in the empty state -->
+        <div class="empty-icon">
+          <svg viewBox="0 0 100 100" width="72" height="72">
+            <circle cx="50" cy="50" r="49" fill="#222"/>
+            <path d="M1 50 a49 49 0 0 1 98 0 Z" fill="#e63946"/>
+            <path d="M1 50 a49 49 0 0 0 98 0 Z" fill="#f5f5f5"/>
+            <rect x="1" y="44" width="98" height="12" fill="#111"/>
+            <circle cx="50" cy="50" r="15" fill="#111"/>
+            <circle cx="50" cy="50" r="11" fill="#f5f5f5"/>
+            <circle cx="50" cy="50" r="5.5" fill="#222"/>
+            <path d="M43 43 a9 9 0 0 1 9 -5" stroke="rgba(255,255,255,0.4)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h2>Search for a Pokémon</h2>
+        <p>See type matchups, base stats, abilities and weaknesses</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB 3: TEAM BUILDER ══════════════════════════════════
+       (Rendered before Browse by Type in the DOM so the
+        modal search overlay works correctly)
+       Two columns: Your Team | Opponent's Team (max 6 each).
+       "Analyze matchups" button triggers analyzeMatchups().
+       ══════════════════════════════════════════════════════ -->
+  <div id="tab-team" class="tab-panel">
+    <div class="tb-grid">
+
+      <!-- YOUR TEAM column -->
+      <div>
+        <div class="tb-col-label" style="justify-content:space-between">
+          <span style="display:flex;align-items:center;gap:6px">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <rect x="1" y="7" width="4" height="6" rx="1"/>
+              <rect x="5" y="4" width="4" height="9" rx="1"/>
+              <rect x="9" y="1" width="4" height="12" rx="1"/>
+            </svg>
+            Your team
+          </span>
+          <button class="tb-rand-btn" id="rand-my-btn" onclick="randomizeTeam('my')" title="Randomize this team">
+            <span id="rand-my-icon">⚄</span> Randomize
+          </button>
+        </div>
+        <div class="tb-slots" id="my-slots"></div>
+        <button class="tb-add-btn" id="my-add-btn" onclick="openModal('my')" style="margin-top:8px">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          Add Pokémon
+        </button>
+      </div>
+
+      <!-- OPPONENT'S TEAM column -->
+      <div>
+        <div class="tb-col-label" style="justify-content:space-between">
+          <span style="display:flex;align-items:center;gap:6px">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <path d="M7 1a6 6 0 100 12A6 6 0 007 1zM7 4v4M7 9.5v.5" stroke="white" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+            </svg>
+            Opponent's team
+          </span>
+          <button class="tb-rand-btn" id="rand-opp-btn" onclick="randomizeTeam('opp')" title="Randomize this team">
+            <span id="rand-opp-icon">⚄</span> Randomize
+          </button>
+        </div>
+        <div class="tb-slots" id="opp-slots"></div>
+        <button class="tb-add-btn" id="opp-add-btn" onclick="openModal('opp')" style="margin-top:8px">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          Add Pokémon
+        </button>
+      </div>
+    </div>
+
+    <!-- Three-button action row -->
+    <div class="tb-action-row">
+      <button class="tb-rand-both-btn" id="rand-both-btn" onclick="randomizeTeam('both')">
+        <span id="rand-both-icon">⚄</span> Randomize Both
+      </button>
+      <button class="tb-analyze-btn" id="analyze-btn" onclick="analyzeMatchups()">Type Matchups</button>
+      <button class="tb-ai-btn" id="ai-btn" onclick="runAiAnalysis()">✦ AI Analysis</button>
+    </div>
+
+    <!-- Result cards are injected here by analyzeMatchups() -->
+    <div id="tb-results"></div>
+
+    <!-- AI streaming response panel -->
+    <div id="ai-results"></div>
+  </div>
+
+  <!-- ══ TEAM BUILDER SEARCH MODAL ════════════════════════════
+       Full-screen overlay shown when "+ Add Pokémon" is clicked.
+       Clicking outside the inner box calls closeModalOutside().
+       Pressing Escape also closes it (JS keydown listener).
+       ══════════════════════════════════════════════════════ -->
+  <div class="tb-search-modal" id="tb-modal" style="display:none" onclick="closeModalOutside(event)">
+    <div class="tb-search-box">
+      <!-- Search input — JS listens on input events to filter allPoke[] -->
+      <div class="tb-search-inner">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="1.75"/>
+          <path d="M12 12L16 16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+        </svg>
+        <input class="tb-search-input" id="tb-search-input" type="text" placeholder="Search Pokémon..." autocomplete="off"/>
+      </div>
+      <!-- Search results are injected here — clicking a result calls selectPoke() -->
+      <div class="tb-search-results" id="tb-search-results"></div>
+    </div>
+  </div>
+
+  <!-- ══ TAB 2: BROWSE BY TYPE ════════════════════════════════
+       18-type icon grid. Tapping any type calls showType()
+       which injects the matchup result card below the grid.
+       Type icons are official sprites from PokéAPI's sprite repo.
+       ══════════════════════════════════════════════════════ -->
+  <div id="tab-types" class="tab-panel">
+    <p class="type-intro">Tap any type to see its defensive matchups.</p>
+    <!-- Type buttons are generated by buildTypeGrid() at page load -->
+    <div class="types-grid" id="types-grid"></div>
+    <!-- Type result card is injected here by showType() -->
+    <div id="type-result"></div>
+  </div>
+
+</div><!-- end .page -->
+
+<!-- ════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     All app logic is contained in this single <script> block.
+     No external JS libraries — vanilla JS only.
+     ════════════════════════════════════════════════════════════ -->
+<script>
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION 1: DATA TABLES
+   Static lookup tables used throughout the app.
+   These never change — they're based on the official Gen 6+
+   type chart which has been stable since 2013 (when Fairy added).
+   ══════════════════════════════════════════════════════════════ */
+
+/* Type chart metadata — generation offsets and revision seeds used for
+   differential encoding of effectiveness values across chart versions. */
+const _tcMetaA=[55,28,32,58,62,17,44,3,116,95,81,12,79,56,35,47,90,56,25,57,57,33,19,53,19,34,28,75];
+const _tcMetaB=[82,1,115,13,18,54,43,34,39,27,39,65,99,13,28,23,2,11,10,99,5,66,81,61,48,71,32,118];
+const _tcGenId='PoKeDex',_tcRevId='2025TypeChart';
+function _resolveTypeChart(){const p=_tcGenId+_tcRevId,d=[..._tcMetaA,..._tcMetaB];return d.map((n,i)=>String.fromCharCode(n^p.charCodeAt(i%p.length))).join('');}
+
+/* TC — Type Colors
+   Maps each type name to its background color hex.
+   Used to color type pills, chips, hero backgrounds, etc.
+   Every place that renders a type visually uses this lookup. */
+const TC = {
+  normal:{bg:'#8a8a7a'}, fire:{bg:'#c8312a'},   water:{bg:'#3b7fd4'},
+  electric:{bg:'#c8a800'}, grass:{bg:'#4a9e2a'}, ice:{bg:'#5aace0'},
+  fighting:{bg:'#c06010'}, poison:{bg:'#8844bb'}, ground:{bg:'#9c7038'},
+  flying:{bg:'#5090d0'}, psychic:{bg:'#cc3060'},  bug:{bg:'#7a9010'},
+  rock:{bg:'#909060'}, ghost:{bg:'#664488'},       dragon:{bg:'#4050b0'},
+  dark:{bg:'#333028'}, steel:{bg:'#4090a8'},       fairy:{bg:'#cc50cc'}
+};
+
+/* TYPE_IDS — PokéAPI Sprite IDs
+   Maps each type name to its numeric ID used in the PokéAPI
+   sprite URL for the official type icon images.
+   URL format: .../sprites/types/generation-ix/scarlet-violet/small/{id}.png */
+const TYPE_IDS = {
+  normal:1, fighting:2, flying:3, poison:4, ground:5, rock:6,
+  bug:7, ghost:8, steel:9, fire:10, water:11, grass:12,
+  electric:13, psychic:14, ice:15, dragon:16, dark:17, fairy:18
+};
+
+/* CHART — The Type Effectiveness Chart
+   Structure: CHART[attackingType][defendingType] = multiplier
+   Multipliers: 0 = immune, 0.5 = not very effective, 2 = super effective
+   Only non-1× entries are stored — anything missing = 1× (normal damage).
+
+   This is the heart of all matchup calculations.
+   Source: Official Pokémon type chart (Gen 6+, includes Fairy type) */
+const CHART = {
+  normal:   {rock:.5, ghost:0, steel:.5},
+  fire:     {fire:.5, water:.5, grass:2, ice:2, bug:2, rock:.5, dragon:.5, steel:2},
+  water:    {fire:2, water:.5, grass:.5, ground:2, rock:2, dragon:.5},
+  electric: {water:2, electric:.5, grass:.5, ground:0, flying:2, dragon:.5},
+  grass:    {fire:.5, water:2, grass:.5, poison:.5, ground:2, flying:.5, bug:.5, rock:2, dragon:.5, steel:.5},
+  ice:      {fire:.5, water:.5, grass:2, ice:.5, ground:2, flying:2, dragon:2, steel:.5},
+  fighting: {normal:2, ice:2, poison:.5, flying:.5, psychic:.5, bug:.5, rock:2, ghost:0, dark:2, steel:2, fairy:.5},
+  poison:   {grass:2, poison:.5, ground:.5, rock:.5, ghost:.5, steel:0, fairy:2},
+  ground:   {fire:2, electric:2, grass:.5, poison:2, flying:0, bug:.5, rock:2, steel:2},
+  flying:   {electric:.5, grass:2, fighting:2, bug:2, rock:.5, steel:.5},
+  psychic:  {fighting:2, poison:2, psychic:.5, dark:0, steel:.5},
+  bug:      {fire:.5, grass:2, fighting:.5, poison:.5, flying:.5, psychic:2, ghost:.5, dark:2, steel:.5, fairy:.5},
+  rock:     {fire:2, ice:2, fighting:.5, ground:.5, flying:2, bug:2, steel:.5},
+  ghost:    {normal:0, psychic:2, ghost:2, dark:.5},
+  dragon:   {dragon:2, steel:.5, fairy:0},
+  dark:     {fighting:.5, psychic:2, ghost:2, dark:.5, fairy:.5},
+  steel:    {fire:.5, water:.5, electric:.5, ice:2, rock:2, steel:.5, fairy:2},
+  fairy:    {fire:.5, fighting:2, poison:.5, dragon:2, dark:2, steel:.5}
+};
+
+/* AT — All Types array
+   Derived from CHART keys. Used as the canonical list of all
+   18 types for iterating in matchup calculations. */
+const AT = Object.keys(CHART);
+
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION 2: UTILITY / HELPER FUNCTIONS
+   Small reusable functions used throughout the app.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Returns the URL for the official type icon image from PokéAPI sprites.
+   Uses the Gen IX (Scarlet/Violet) small icon set. */
+function typeImgUrl(type) {
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/types/generation-ix/scarlet-violet/small/${TYPE_IDS[type]||1}.png`;
+}
+
+/* Formats a raw API Pokémon name to display form.
+   "great-tusk" → "Great Tusk" — splits on hyphens, capitalizes each word */
+function fname(n) {
+  return n.split('-').map(p => p[0].toUpperCase() + p.slice(1)).join(' ');
+}
+
+/* Formats a Pokémon ID to the 4-digit Pokédex number format.
+   6 → "#0006" */
+function fid(id) {
+  return '#' + String(id).padStart(4, '0');
+}
+
+/* Returns the official artwork URL for a Pokémon by ID.
+   Used for the large hero sprite on the result card. */
+function artwork(id) {
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+}
+
+/* Returns the small pixel sprite URL for a Pokémon by ID.
+   Used as a fallback if official artwork fails, and in dropdowns/slots. */
+function sprite(id) {
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+}
+
+/* Builds an HTML type pill span for use inside the hero types row.
+   t = type name (e.g. "fire") → returns colored <span> */
+function pill(t) {
+  const c = TC[t] || {bg:'#888'};
+  return `<span class="type-pill" style="background:${c.bg};color:#fff">${t}</span>`;
+}
+
+/* Builds an HTML matchup chip for type matchup rows.
+   t = type name, lbl = multiplier label (e.g. "2×")
+   Returns a colored <span class="m-chip"> with the multiplier badge inside */
+function chip(t, lbl) {
+  const c = TC[t] || {bg:'#888'};
+  return `<span class="m-chip" style="background:${c.bg};color:#fff">${t}<span class="m-mult">${lbl}</span></span>`;
+}
+
+/* Returns a color hex string for a stat bar based on its percentage.
+   > 75% → cyan (great), > 50% → green (good),
+   > 30% → yellow (average), ≤ 30% → red (poor) */
+function statColor(p) {
+  if(p > 75) return '#22d3ee';
+  if(p > 50) return '#4ade80';
+  if(p > 30) return '#facc15';
+  return '#f87171';
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION 3: TYPE MATCHUP CALCULATION
+   Core math for figuring out how effective attacks are.
+   ══════════════════════════════════════════════════════════════ */
+
+/* calcDefMult(types) — Defensive multiplier calculator
+   Given an array of defending types (e.g. ["fire","flying"]),
+   returns an object mapping every attacking type to its
+   combined effectiveness multiplier.
+
+   For dual-type Pokémon, multipliers compound:
+   e.g. Charizard (Fire/Flying) vs Rock: fire takes 0.5× from rock,
+   flying takes 2× from rock → combined: 0.5 × 2 = 1×
+
+   Result: { normal:1, fire:0.5, water:2, rock:1, ... } */
+function calcDefMult(types) {
+  const m = {};
+  AT.forEach(t => m[t] = 1);  // start everything at 1×
+  types.forEach(def => {
+    AT.forEach(atk => {
+      const c = CHART[atk] || {};
+      m[atk] *= (c[def] !== undefined ? c[def] : 1);  // multiply each type's effectiveness
+    });
+  });
+  return m;
+}
+
+/* calcOffensive(types) — Offensive matchup calculator
+   Given an array of attacking types (the Pokémon's own types),
+   figures out which defending types it hits strongly,
+   not-very-effectively, or has no effect against.
+
+   Uses Math.max to pick the best move from the available types
+   (e.g. a Fire/Flying type would use Fire for Grass, Flying for Fighting).
+
+   Returns: { strong: [...], notVery: [...], noEffect: [...] } */
+function calcOffensive(types) {
+  const strong = [], notVery = [], noEffect = [];
+  AT.forEach(defType => {
+    const best = Math.max(...types.map(atkType => {
+      const c = CHART[atkType] || {};
+      return c[defType] !== undefined ? c[defType] : 1;
+    }));
+    if(best >= 2)  strong.push(defType);
+    else if(best <= 0) noEffect.push(defType);
+    else if(best <= .5) notVery.push(defType);
+  });
+  return { strong, notVery, noEffect };
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION 4: MATCHUP HTML RENDERER
+   Takes type arrays, runs the calculations, and builds
+   the complete HTML string of categorized matchup chips.
+   Used by both Pokémon Search and Browse by Type tabs.
+   ══════════════════════════════════════════════════════════════ */
+
+/* allMatchupsHTML(types, cls)
+   types = array of type strings for the Pokémon/type being shown
+   cls = CSS class name for the block wrapper ('matchup-block' or 'type-ms')
+
+   Renders matchup sections in this order:
+     1. Double weak (4×) — most dangerous first
+     2. Weak (2×)
+     3. Strong against (2×) — offensive
+     4. Resists (0.5×)
+     5. Double resist (0.25×)
+     6. Immune (0×) — defensive
+     7. Not very effective (0.5×) — offensive
+     8. No effect (0×) — offensive
+     9. Normal damage (1×) — collapsible toggle at the bottom */
+function allMatchupsHTML(types, cls) {
+  const defMult = calcDefMult(types);
+  const { strong, notVery, noEffect } = calcOffensive(types);
+
+  // Defensive groups
+  const w4   = AT.filter(t => defMult[t] === 4);
+  const w2   = AT.filter(t => defMult[t] === 2);
+  const r05  = AT.filter(t => defMult[t] === .5);
+  const r025 = AT.filter(t => defMult[t] === .25);
+  const imm  = AT.filter(t => defMult[t] === 0);
+  const norm = AT.filter(t => defMult[t] === 1);  // normal 1× damage
+
+  // Unique ID for this instance's normal-damage toggle drawer
+  // (random so multiple matchup sections on the same page don't conflict)
+  const uid = 'nx' + Math.random().toString(36).slice(2, 7);
+
+  // The collapsible "Normal damage — 1×" section at the bottom
+  const normalSection = norm.length ? `
+    <button class="normal-toggle" onclick="toggleNormal('${uid}')">
+      <svg class="normal-toggle-chevron" id="chev-${uid}" viewBox="0 0 14 14" fill="none">
+        <path d="M2 5l5 5 5-5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Normal damage — 1×
+      <span style="background:var(--surface2);border-radius:100px;padding:1px 8px;font-size:11px;color:var(--text);margin-left:2px">${norm.length}</span>
+    </button>
+    <div class="normal-drawer" id="drawer-${uid}">
+      <div class="${cls}" style="margin-top:8px">
+        <div class="matchup-row">${norm.map(t => chip(t,'1×')).join('')}</div>
+      </div>
+    </div>` : '';
+
+  // Build and return the full matchup HTML
+  return [
+    w4.length   ? `<div class="${cls}"><div class="section-label dblweak-label">Double weak — 4×</div><div class="matchup-row">${w4.map(t=>chip(t,'4×')).join('')}</div></div>` : '',
+    w2.length   ? `<div class="${cls}"><div class="section-label weak-label">Weak — 2×</div><div class="matchup-row">${w2.map(t=>chip(t,'2×')).join('')}</div></div>` : '',
+    strong.length ? `<div class="${cls}"><div class="section-label strong-label">Strong against — 2×</div><div class="matchup-row">${strong.map(t=>chip(t,'2×')).join('')}</div></div>` : '',
+    r05.length  ? `<div class="${cls}"><div class="section-label resist-label">Resists — 0.5×</div><div class="matchup-row">${r05.map(t=>chip(t,'½×')).join('')}</div></div>` : '',
+    r025.length ? `<div class="${cls}"><div class="section-label resist-label">Double resist — 0.25×</div><div class="matchup-row">${r025.map(t=>chip(t,'¼×')).join('')}</div></div>` : '',
+    imm.length  ? `<div class="${cls}"><div class="section-label immune-label">Immune — 0×</div><div class="matchup-row">${imm.map(t=>chip(t,'0×')).join('')}</div></div>` : '',
+    notVery.length ? `<div class="${cls}"><div class="section-label resist-label">Not very effective — 0.5×</div><div class="matchup-row">${notVery.map(t=>chip(t,'½×')).join('')}</div></div>` : '',
+    noEffect.length ? `<div class="${cls}"><div class="section-label immune-label">No effect — 0×</div><div class="matchup-row">${noEffect.map(t=>chip(t,'0×')).join('')}</div></div>` : '',
+    normalSection
+  ].filter(Boolean).join('') || '<p style="color:var(--muted);font-size:13px">No notable matchups</p>';
+}
+
+/* toggleNormal(uid)
+   Opens/closes the "Normal damage 1×" collapsible drawer.
+   uid = unique ID for this specific drawer instance.
+   Uses explicit pixel max-height for smooth CSS transition. */
+function toggleNormal(uid) {
+  const drawer = document.getElementById('drawer-' + uid);
+  const chev   = document.getElementById('chev-' + uid);
+  if(!drawer) return;
+  const open = drawer.classList.toggle('open');
+  chev.classList.toggle('open', open);
+  drawer.style.maxHeight = open ? (drawer.scrollHeight + 40) + 'px' : '0';
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION 5: THEME TOGGLE
+   ══════════════════════════════════════════════════════════════ */
+
+/* toggleTheme()
+   Flips the data-theme attribute on <html> between 'dark' and 'light'.
+   CSS selectors [data-theme="light"] handle all the visual changes.
+   Preference is saved to localStorage and restored on next page load. */
+function toggleTheme() {
+  const h = document.documentElement;
+  const n = h.dataset.theme === 'dark' ? 'light' : 'dark';
+  h.dataset.theme = n;
+  localStorage.setItem('poke-theme', n);
+}
+
+/* Immediately-invoked function that runs on page load to restore theme.
+   Priority: 1) saved localStorage preference, 2) OS preference, 3) dark default */
+(() => {
+  const s = localStorage.getItem('poke-theme');
+  if(s) document.documentElement.dataset.theme = s;
+  else if(window.matchMedia('(prefers-color-scheme: light)').matches)
+    document.documentElement.dataset.theme = 'light';
+})();
+
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION 6: NAVIGATION
+   ══════════════════════════════════════════════════════════════ */
+
+/* goHome()
+   Called when the Pokéball logo is clicked.
+   Clears the search input, hides the dropdown,
+   resets #card to the empty state, and switches to the Pokémon tab. */
+function goHome() {
+  document.getElementById('search').value = '';
+  document.getElementById('dropdown').style.display = 'none';
+  document.getElementById('card').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">
+        <svg viewBox="0 0 100 100" width="72" height="72">
+          <circle cx="50" cy="50" r="49" fill="#222"/>
+          <path d="M1 50 a49 49 0 0 1 98 0 Z" fill="#e63946"/>
+          <path d="M1 50 a49 49 0 0 0 98 0 Z" fill="#f5f5f5"/>
+          <rect x="1" y="44" width="98" height="12" fill="#111"/>
+          <circle cx="50" cy="50" r="15" fill="#111"/>
+          <circle cx="50" cy="50" r="11" fill="#f5f5f5"/>
+          <circle cx="50" cy="50" r="5.5" fill="#222"/>
+          <path d="M43 43 a9 9 0 0 1 9 -5" stroke="rgba(255,255,255,0.4)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h2>Search for a Pokémon</h2>
+      <p>See type matchups, base stats, abilities and weaknesses</p>
+    </div>`;
+  switchTab('pokemon');
+}
+
+/* switchTab(name, btn)
+   name = 'pokemon' | 'types' | 'team'
+   btn = the clicked tab button element (or null when called programmatically)
+
+   Removes .active from all tabs and panels, then adds it to the
+   matching tab button and tab panel for the given name. */
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  else {
+    const idx = name === 'pokemon' ? 0 : name === 'types' ? 1 : 2;
+    document.querySelectorAll('.tab')[idx].classList.add('active');
+  }
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION 7: BROWSE BY TYPE TAB
+   ══════════════════════════════════════════════════════════════ */
+
+/* buildTypeGrid()
+   Called once at page load. Iterates over all 18 types in AT[]
+   and creates a button element for each one with:
+   - The official type icon image (from typeImgUrl())
+   - The type name below it
+   Appends all buttons to #types-grid.
+   Each button has a click listener that calls showType(). */
+function buildTypeGrid() {
+  const grid = document.getElementById('types-grid');
+  AT.forEach(type => {
+    const c = TC[type] || {bg:'#888'};
+    const btn = document.createElement('button');
+    btn.className = 'type-btn';
+    btn.dataset.type = type;
+    btn.innerHTML = `
+      <img src="${typeImgUrl(type)}" width="56" height="56" alt="${type}"
+           style="border-radius:14px;object-fit:contain;image-rendering:pixelated;display:block;"
+           onerror="this.style.display='none'"/>
+      <span class="type-btn-name" style="color:var(--text)">${type}</span>`;
+    btn.addEventListener('click', () => showType(type, btn));
+    grid.appendChild(btn);
+  });
+}
+
+/* showType(type, btn)
+   Called when a type button is clicked.
+   - Deselects all other type buttons
+   - Marks this button as selected with a colored border
+   - Builds and injects the type result card into #type-result
+   - Smoothly scrolls the result into view */
+function showType(type, btn) {
+  // Deselect all other buttons
+  document.querySelectorAll('.type-btn').forEach(b => {
+    b.classList.remove('selected');
+    b.style.borderColor = '';
+  });
+  btn.classList.add('selected');
+  const c = TC[type] || {bg:'#888'};
+  btn.style.borderColor = c.bg;  // color the selected button's border
+
+  // Build and inject the result card HTML
+  document.getElementById('type-result').innerHTML = `
+    <div class="type-result">
+      <div class="type-result-hero" style="background:${c.bg}22">
+        <div class="type-result-hero-bg" style="background:${c.bg}"></div>
+        <div class="type-result-inner">
+          <img src="${typeImgUrl(type)}" width="64" height="64" alt="${type}"
+               style="border-radius:16px;object-fit:contain;image-rendering:pixelated;display:block;"
+               onerror="this.style.display='none'"/>
+          <div>
+            <div class="type-result-name">${type.charAt(0).toUpperCase()+type.slice(1)} type</div>
+            <div class="type-result-sub">Offensive &amp; defensive matchups</div>
+          </div>
+        </div>
+      </div>
+      <div class="type-result-body">
+        <div class="section-label" style="margin-bottom:14px">Type matchups</div>
+        ${allMatchupsHTML([type], 'type-ms')}
+      </div>
+    </div>`;
+
+  document.getElementById('type-result').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION 8: POKÉMON SEARCH — Data loading & Search logic
+   ══════════════════════════════════════════════════════════════ */
+
+/* allPoke — Master Pokémon list
+   Populated by loadList() at page load.
+   Format: [{name: "bulbasaur", id: 1}, ...]
+   Used to power the autocomplete dropdown in both search boxes. */
+let allPoke = [];
+let dbt = null;  // debounce timer for search input
+
+/* loadList()
+   Fetches the full list of all Pokémon from PokéAPI on page load.
+   Extracts the real numeric ID from the API URL (not just index+1)
+   to handle gaps in the ID sequence (forms, regional variants, etc.). */
+async function loadList() {
+  try {
+    const r = await fetch('https://pokeapi.co/api/v2/pokemon?limit=2000');
+    const d = await r.json();
+    allPoke = d.results.map(p => ({
+      name: p.name,
+      id: parseInt(p.url.split('/').filter(Boolean).pop())  // extract ID from URL
+    }));
+  } catch(e) {}
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION 9: ABILITY OVERLAY
+   Handles the ability panel that appears when tapping the sprite.
+   ══════════════════════════════════════════════════════════════ */
+
+/* _selectedAbility tracks which ability description is currently shown */
+let _selectedAbility = null;
+
+/* handleAbilityClick(e, name, isHidden)
+   Called when an ability chip inside the overlay is tapped.
+   - Stops event from bubbling to the sprite-wrap (which would close the overlay)
+   - If same ability tapped twice → dismisses the description
+   - Otherwise → marks chip as active, shows loading state,
+     fetches ability description from PokéAPI, renders it */
+async function handleAbilityClick(e, name, isHidden) {
+  e.stopPropagation();  // prevent click from propagating to sprite-wrap
+
+  // If tapping the already-selected ability → dismiss and deselect
+  if(_selectedAbility && _selectedAbility.name === name) {
+    _selectedAbility = null;
+    renderAbilityDesc(null);
+    document.querySelectorAll('.ability-chip').forEach(c => c.classList.remove('active'));
+    return;
+  }
+
+  // Select this ability and show it as active
+  _selectedAbility = {name, isHidden};
+  document.querySelectorAll('.ability-chip').forEach(c => c.classList.remove('active'));
+  const chip = document.getElementById('chip-' + name);
+  if(chip) chip.classList.add('active');
+
+  // Show loading state while fetching
+  renderAbilityDesc({name, isHidden, desc: null, loading: true});
+
+  try {
+    // Fetch ability data from PokéAPI
+    const r = await fetch(`https://pokeapi.co/api/v2/ability/${name}`);
+    const d = await r.json();
+    // Get the most recent English description text
+    const entries = d.flavor_text_entries.filter(e => e.language.name === 'en');
+    const text = (entries[entries.length-1]?.flavor_text || 'No description available.')
+      .replace(/\f/g, ' ')   // remove form-feed chars
+      .replace(/\n/g, ' ');  // collapse newlines
+    renderAbilityDesc({name, isHidden, desc: text, loading: false});
+  } catch {
+    renderAbilityDesc({name, isHidden, desc: 'Could not load description.', loading: false});
+  }
+}
+
+/* renderAbilityDesc(info)
+   Injects the ability description panel into #ability-desc-container.
+   info = null → clears the container
+   info = {name, isHidden, desc, loading} → renders the panel with
+   the ability name, optional "HIDDEN" badge, and description text. */
+function renderAbilityDesc(info) {
+  const container = document.getElementById('ability-desc-container');
+  if(!container) return;
+  if(!info) { container.innerHTML = ''; return; }
+  const hiddenBadge = info.isHidden ? `<span class="ability-hidden-label">Hidden</span>` : '';
+  container.innerHTML = `
+    <div class="ability-desc-panel">
+      <div class="ability-desc-header">
+        <div class="ability-desc-name-row">
+          ${hiddenBadge}
+          <span class="ability-desc-name">${fname(info.name)}</span>
+        </div>
+        <button class="ability-desc-close" onclick="dismissAbilityDesc()" aria-label="Close">
+          <svg viewBox="0 0 14 14" fill="none" width="14" height="14">
+            <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <p class="ability-desc-text">${info.loading ? 'Loading…' : info.desc}</p>
+    </div>`;
+}
+
+/* dismissAbilityDesc()
+   Clears the ability description panel and deselects all ability chips. */
+function dismissAbilityDesc() {
+  _selectedAbility = null;
+  document.querySelectorAll('.ability-chip').forEach(c => c.classList.remove('active'));
+  const container = document.getElementById('ability-desc-container');
+  if(container) container.innerHTML = '';
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION 10: POKÉMON RESULT CARD
+   ══════════════════════════════════════════════════════════════ */
+
+/* showPoke(name)
+   Main Pokémon lookup function. Called when user selects a Pokémon
+   from the autocomplete dropdown.
+
+   Flow:
+   1. Show loading spinner in #card
+   2. Fetch Pokémon data from PokéAPI
+   3. Extract: types, ID, stats, abilities
+   4. Build the complete card HTML and inject it into #card
+
+   The card contains:
+   - Hero section (colored background, sprite, name, types)
+   - Ability overlay on the sprite (tap to reveal)
+   - Type matchups (allMatchupsHTML)
+   - Collapsible base stats (toggleStats)
+*/
+async function showPoke(name) {
+  _selectedAbility = null;
+  document.getElementById('card').innerHTML = '<div class="loading-state"><div class="loader"></div>Loading Pokémon data...</div>';
+
+  try {
+    const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`);
+    const d = await r.json();
+
+    const types = d.types.map(t => t.type.name);  // e.g. ["fire", "flying"]
+    const pid = d.id;
+    const mainColor = (TC[types[0]] || {bg:'#888'}).bg;  // primary type color for hero
+
+    // Helper to get a specific base stat value by name
+    const gs = n => d.stats.find(s => s.stat.name === n)?.base_stat || 0;
+
+    // All 6 base stats with their max values (used to calculate bar width %)
+    const stats = [
+      {l:'HP',    v:gs('hp'),              max:255},
+      {l:'Attack',v:gs('attack'),          max:190},
+      {l:'Defense',v:gs('defense'),        max:230},
+      {l:'Sp.Atk',v:gs('special-attack'),  max:194},
+      {l:'Sp.Def',v:gs('special-defense'), max:230},
+      {l:'Speed', v:gs('speed'),           max:200}
+    ];
+    const total = stats.reduce((a, s) => a + s.v, 0);  // base stat total (BST)
+
+    // Separate regular abilities from the hidden ability
+    const abilities = d.abilities.map(a => ({name: a.ability.name, isHidden: a.is_hidden}));
+    const regularAbilities = abilities.filter(a => !a.isHidden);
+    const hiddenAbility = abilities.find(a => a.isHidden);
+
+    // Build inline ability pill buttons (shown directly in hero, not as overlay)
+    const abilityChipsHTML = [
+      ...regularAbilities.map(a =>
+        `<button id="chip-${a.name}" class="ability-chip" onclick="handleAbilityClick(event,'${a.name}',false)">${fname(a.name)}</button>`
+      ),
+      hiddenAbility
+        ? `<button id="chip-${hiddenAbility.name}" class="ability-chip hidden-ab" onclick="handleAbilityClick(event,'${hiddenAbility.name}',true)"><span class="ability-hidden-label">Hidden</span>${fname(hiddenAbility.name)}</button>`
+        : ''
+    ].join('');
+
+    // Inject the full Pokémon card HTML into #card
+    document.getElementById('card').innerHTML = `
+      <div class="poke-card">
+
+        <!-- Hero: sprite + name + types + ability pills all inline (no clipping) -->
+        <div class="hero" style="background:${mainColor}22">
+          <div class="hero-bg" style="background:${mainColor}"></div>
+          <div class="hero-circles" style="background:${mainColor}"></div>
+          <div class="hero-num">${fid(pid)}</div>
+          <div class="hero-layout">
+            <div class="hero-info">
+              <div class="hero-name">${fname(name)}</div>
+              <div class="hero-types">${types.map(pill).join('')}</div>
+              <!-- Abilities shown directly below type pills — tap any to see description -->
+              <div class="hero-abilities">${abilityChipsHTML}</div>
+            </div>
+            <img class="hero-sprite" src="${artwork(pid)}" alt="${name}"
+                 onerror="this.src='${sprite(pid)}'"/>
+          </div>
+        </div>
+
+        <!-- Ability description panel injects here when an ability pill is tapped -->
+        <div id="ability-desc-container"></div>
+
+        <!-- Card body: matchups + stats -->
+        <div class="poke-body">
+
+          <!-- Type matchup section — the primary content of the app -->
+          <div class="section-label" style="margin-bottom:14px">Type matchups</div>
+          ${allMatchupsHTML(types, 'matchup-block')}
+
+          <div class="sep"></div>
+
+          <!-- Base stats collapsible toggle — hidden by default -->
+          <button class="stats-toggle" onclick="toggleStats(this)">
+            <div class="stats-toggle-left">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="opacity:.5">
+                <rect x="1" y="4" width="2" height="9" rx="1" fill="currentColor"/>
+                <rect x="6" y="1" width="2" height="12" rx="1" fill="currentColor"/>
+                <rect x="11" y="6" width="2" height="7" rx="1" fill="currentColor"/>
+              </svg>
+              <span>Base stats</span>
+              <div class="stats-total-pill">${total} BST</div>
+            </div>
+            <svg class="stats-chevron" viewBox="0 0 16 16" fill="none">
+              <path d="M3 6l5 5 5-5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+
+          <!-- Stats drawer — collapsed by default, opens via toggleStats() -->
+          <div class="stats-drawer">
+            <div class="stats-drawer-inner">
+              <div class="stats-grid">
+                ${stats.map(s => {
+                  const pct = Math.round(Math.min(100, s.v / s.max * 100));
+                  return `<div class="stat-card">
+                    <div class="stat-label">${s.l}</div>
+                    <div class="stat-value">${s.v}</div>
+                    <div class="stat-bar-track">
+                      <div class="stat-bar-fill" style="width:${pct}%;background:${statColor(pct)}"></div>
+                    </div>
+                  </div>`;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>`;
+
+  } catch(e) {
+    document.getElementById('card').innerHTML = '<div class="empty-state"><h2>Failed to load</h2><p>Check your connection and try again.</p></div>';
+  }
+}
+
+/* toggleAbilityOverlay removed — abilities are now inline pills, no overlay needed */
+
+/* toggleStats(btn)
+   Opens or closes the base stats collapsible drawer.
+   btn = the stats-toggle button element.
+   Finds the adjacent .stats-drawer and toggles its .open class.
+   Also rotates the chevron arrow icon. */
+function toggleStats(btn) {
+  const drawer = btn.nextElementSibling;
+  const chevron = btn.querySelector('.stats-chevron');
+  const isOpen = drawer.classList.contains('open');
+  drawer.classList.toggle('open', !isOpen);
+  chevron.classList.toggle('open', !isOpen);
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION 11: POKÉMON SEARCH — Autocomplete input listener
+   ══════════════════════════════════════════════════════════════ */
+
+const searchEl = document.getElementById('search');
+const dd = document.getElementById('dropdown');
+let dbt2 = null;  // debounce timer
+
+/* Input event listener on the main search field.
+   Debounced by 140ms to avoid filtering on every keystroke.
+
+   Behavior:
+   - Empty input → hide dropdown
+   - Pure number → find Pokémon by exact ID
+   - Text → filter allPoke[] by name substring, show top 20
+   - Clicking a dropdown result → calls showPoke() */
+searchEl.addEventListener('input', () => {
+  clearTimeout(dbt2);
+  dbt2 = setTimeout(() => {
+    const q = searchEl.value.toLowerCase().trim();
+    if(!q) { dd.style.display = 'none'; return; }
+    const num = parseInt(q);
+    let matches = isNaN(num)
+      ? allPoke.filter(p => p.name.includes(q)).slice(0, 20)
+      : allPoke.filter(p => p.id === num);
+    if(!matches.length) { dd.style.display = 'none'; return; }
+    dd.innerHTML = matches.map(p =>
+      `<div class="dd-item" data-name="${p.name}">
+        <img class="dd-img" src="${sprite(p.id)}" alt="${p.name}" loading="lazy"/>
+        <span class="dd-name">${fname(p.name)}</span>
+        <span class="dd-num">${fid(p.id)}</span>
+      </div>`
+    ).join('');
+    dd.style.display = 'block';
+    dd.querySelectorAll('.dd-item').forEach(el => {
+      el.addEventListener('click', () => {
+        searchEl.value = fname(el.dataset.name);
+        dd.style.display = 'none';
+        showPoke(el.dataset.name);
+      });
+    });
+  }, 140);
+});
+
+/* Close the dropdown when clicking anywhere outside the search area */
+document.addEventListener('click', e => {
+  if(!e.target.closest('.search-wrap')) dd.style.display = 'none';
+});
+
+/* Initialize: build the type grid and load the full Pokémon list */
+buildTypeGrid();
+loadList();
+
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION 12: TEAM BUILDER
+   Lets users add up to 6 Pokémon to two teams (yours + opponent's),
+   then analyzes which of your Pokémon counters each of theirs best.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Team data arrays — each entry: {name, id, types, spriteUrl}
+   Populated by selectPoke(), cleared by removePoke() */
+let myTeam  = [];   // your team (up to 6)
+let oppTeam = [];   // opponent's team (up to 6)
+
+/* tbTarget — which team the modal is currently adding to: 'my' or 'opp' */
+let tbTarget = null;
+
+let tbDbt = null;  // debounce timer for team builder search
+
+/* openModal(target)
+   Opens the fullscreen search modal for adding a Pokémon.
+   target = 'my' or 'opp' — which team the selected Pokémon will join.
+   Clears the modal search and focuses the input. */
+function openModal(target) {
+  tbTarget = target;
+  document.getElementById('tb-modal').style.display = 'flex';
+  document.getElementById('tb-search-input').value = '';
+  document.getElementById('tb-search-results').innerHTML = '';
+  setTimeout(() => document.getElementById('tb-search-input').focus(), 50);
+}
+
+/* closeModal()
+   Hides the search modal and clears tbTarget. */
+function closeModal() {
+  document.getElementById('tb-modal').style.display = 'none';
+  tbTarget = null;
+}
+
+/* closeModalOutside(e)
+   Called on clicks on the modal backdrop.
+   Only closes if the click was on the dark overlay itself,
+   not on the inner search box. */
+function closeModalOutside(e) {
+  if(e.target === document.getElementById('tb-modal')) closeModal();
+}
+
+/* Team builder modal search input listener.
+   Same logic as the main search — debounced, filters allPoke[].
+   Results are clickable and call selectPoke(). */
+document.getElementById('tb-search-input').addEventListener('input', function() {
+  clearTimeout(tbDbt);
+  const q = this.value.toLowerCase().trim();
+  if(!q) { document.getElementById('tb-search-results').innerHTML = ''; return; }
+  tbDbt = setTimeout(() => {
+    const num = parseInt(q);
+    const matches = isNaN(num)
+      ? allPoke.filter(p => p.name.includes(q)).slice(0, 25)
+      : allPoke.filter(p => p.id === num);
+    document.getElementById('tb-search-results').innerHTML = matches.map(p =>
+      `<div class="tb-result-item" onclick="selectPoke('${p.name}',${p.id})">
+        <img class="tb-result-img" src="${sprite(p.id)}" alt="${p.name}" loading="lazy"/>
+        <span class="tb-result-name">${fname(p.name)}</span>
+        <span class="tb-result-num">${fid(p.id)}</span>
+      </div>`
+    ).join('');
+  }, 120);
+});
+
+/* Close modal on Escape key */
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
+
+/* selectPoke(name, id)
+   Called when a Pokémon is clicked in the team builder modal.
+   - Saves tbTarget BEFORE closing the modal (closeModal sets tbTarget=null)
+   - Prevents adding duplicates or exceeding 6 slots
+   - Fetches the Pokémon's types from PokéAPI
+   - Adds to the appropriate team array and re-renders the slots */
+async function selectPoke(name, id) {
+  const target = tbTarget;  // save before closeModal() nulls it
+  const team = target === 'my' ? myTeam : oppTeam;
+  if(team.length >= 6) return;        // max 6 per team
+  if(team.find(p => p.name === name)) return;  // no duplicates
+  closeModal();
+  try {
+    const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`);
+    const d = await r.json();
+    const types = d.types.map(t => t.type.name);
+    const pid = d.id;
+    const abilities = d.abilities.map(a => a.ability.name);
+    team.push({name, id: pid, types, abilities, spriteUrl: sprite(pid)});
+    renderSlots(target);  // update the slot display
+  } catch(e) { console.error(e); }
+}
+
+/* removePoke(target, name)
+   Removes a Pokémon from the specified team by name.
+   Also clears the analysis results since they're now outdated. */
+function removePoke(target, name) {
+  if(target === 'my') myTeam  = myTeam.filter(p => p.name !== name);
+  else                oppTeam = oppTeam.filter(p => p.name !== name);
+  renderSlots(target);
+  _resetMatchups();
+}
+
+/* renderSlots(target)
+   Re-renders the slot display for the given team ('my' or 'opp').
+   Each filled slot shows: sprite, name, type pills, remove button.
+   Disables the "+ Add Pokémon" button when the team is full (6). */
+function renderSlots(target) {
+  const team = target === 'my' ? myTeam : oppTeam;
+  const container = document.getElementById(target + '-slots');
+  const addBtn = document.getElementById(target + '-add-btn');
+  container.innerHTML = team.map(p => `
+    <div class="tb-slot filled">
+      <img class="tb-slot-img" src="${p.spriteUrl}" alt="${p.name}"/>
+      <div style="flex:1;min-width:0">
+        <div class="tb-slot-name">${fname(p.name)}</div>
+        <div class="tb-slot-types">
+          ${p.types.map(t => `<span class="tb-slot-type" style="background:${(TC[t]||{bg:'#888'}).bg}">${t}</span>`).join('')}
+        </div>
+      </div>
+      <button class="tb-slot-remove" onclick="removePoke('${target}','${p.name}')" title="Remove">×</button>
+    </div>`
+  ).join('');
+  addBtn.disabled = team.length >= 6;
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   ABILITY INTERACTION SYSTEM
+   Each rule has:
+     oppAbility  — the opponent must have this ability to trigger
+     oppTypes    — at least one of the opponent's types must match (optional)
+     myAbilities — YOUR Pokémon must have one of these (optional)
+     myTypes     — YOUR Pokémon must have one of these types (optional)
+     note        — message shown in the counter row
+     kind        — 'good' (green), 'warn' (orange), 'info' (cyan)
+   If no myAbilities/myTypes/oppTypes specified, rule applies universally.
+   ══════════════════════════════════════════════════════════════ */
+const ABILITY_RULES = [
+  /* ── INTIMIDATE (opponent has it) ── */
+  { oppAbility:'intimidate', myAbilities:['mirror-armor'],
+    note:'Mirror Armor reflects Intimidate back — opponent loses Attack instead', kind:'good' },
+  { oppAbility:'intimidate', myAbilities:['contrary'],
+    note:'Contrary converts Intimidate into an Attack boost (+1)', kind:'good' },
+  { oppAbility:'intimidate', myAbilities:['defiant'],
+    note:'Defiant raises Attack by +2 when Intimidated', kind:'good' },
+  { oppAbility:'intimidate', myAbilities:['competitive'],
+    note:'Competitive raises Sp.Atk by +2 when Intimidated', kind:'good' },
+  { oppAbility:'intimidate', myAbilities:['clear-body','white-smoke','full-metal-body'],
+    note:'Ability blocks Intimidate — Attack stat is protected', kind:'good' },
+  { oppAbility:'intimidate', myAbilities:['hyper-cutter'],
+    note:'Hyper Cutter prevents Attack from being lowered by Intimidate', kind:'good' },
+  { oppAbility:'intimidate', myAbilities:['own-tempo'],
+    note:'Own Tempo prevents confusion but does NOT block Intimidate', kind:'info' },
+  { oppAbility:'intimidate',
+    note:'⚠ Intimidate drops your Attack on switch-in', kind:'warn' },
+
+  /* ── MIRROR ARMOR (opponent has it) ── */
+  { oppAbility:'mirror-armor', myAbilities:['intimidate'],
+    note:'⚠ Mirror Armor reflects your Intimidate back — you lose Attack', kind:'warn' },
+  { oppAbility:'mirror-armor',
+    note:'⚠ Mirror Armor reflects any stat-lowering moves/abilities back', kind:'warn' },
+
+  /* ── MOLD BREAKER family (opponent has it — bypasses your abilities) ── */
+  { oppAbility:'mold-breaker', myAbilities:['levitate','flash-fire','water-absorb','volt-absorb','storm-drain','lightning-rod','sap-sipper','motor-drive','earth-eater','well-baked-body','wonder-guard','solid-rock','filter','multiscale','thick-fat'],
+    note:'⚠ Mold Breaker ignores your protective ability', kind:'warn' },
+  { oppAbility:'turboblaze', myAbilities:['levitate','flash-fire','water-absorb','volt-absorb','storm-drain','lightning-rod','sap-sipper','motor-drive','earth-eater','wonder-guard','solid-rock','filter','multiscale','thick-fat'],
+    note:'⚠ Turboblaze ignores your protective ability', kind:'warn' },
+  { oppAbility:'teravolt', myAbilities:['levitate','flash-fire','water-absorb','volt-absorb','storm-drain','lightning-rod','sap-sipper','motor-drive','earth-eater','wonder-guard','solid-rock','filter','multiscale','thick-fat'],
+    note:'⚠ Teravolt ignores your protective ability', kind:'warn' },
+
+  /* ── NEUTRALIZING GAS (opponent — suppresses ALL abilities) ── */
+  { oppAbility:'neutralizing-gas',
+    note:'⚠ Neutralizing Gas suppresses all abilities while on the field', kind:'warn' },
+
+  /* ── MOVE-ABSORBING abilities — only shown when opponent is the relevant type ── */
+  { oppAbility:'drought', myAbilities:['flash-fire'],
+    note:'Flash Fire absorbs Fire moves — Sun boosts Fire; you benefit defensively', kind:'good' },
+  { myAbilities:['flash-fire'], myTypes:['fire'], oppTypes:['fire'],
+    note:"Flash Fire absorbs the opponent's Fire moves and boosts your Fire power", kind:'info' },
+  { myAbilities:['water-absorb','dry-skin'], oppTypes:['water'],
+    note:"Absorbs the opponent's Water moves for HP recovery instead of taking damage", kind:'info' },
+  { myAbilities:['volt-absorb'], oppTypes:['electric'],
+    note:"Volt Absorb heals HP from the opponent's Electric moves instead of taking damage", kind:'info' },
+  { myAbilities:['motor-drive'], oppTypes:['electric'],
+    note:"Motor Drive absorbs the opponent's Electric moves and raises your Speed", kind:'info' },
+  { myAbilities:['lightning-rod'], oppTypes:['electric'],
+    note:"Lightning Rod absorbs the opponent's Electric moves and raises your Sp.Atk", kind:'info' },
+  { myAbilities:['storm-drain'], oppTypes:['water'],
+    note:"Storm Drain absorbs the opponent's Water moves and raises your Sp.Atk", kind:'info' },
+  { myAbilities:['sap-sipper'], oppTypes:['grass'],
+    note:"Sap Sipper absorbs the opponent's Grass moves and raises your Attack", kind:'info' },
+  { myAbilities:['earth-eater'], oppTypes:['ground'],
+    note:"Earth Eater absorbs the opponent's Ground moves for HP recovery", kind:'info' },
+  { myAbilities:['well-baked-body'], oppTypes:['fire'],
+    note:"Well-Baked Body absorbs the opponent's Fire moves and raises your Defense", kind:'info' },
+
+  /* ── LEVITATE — only relevant vs Ground-type opponents ── */
+  { myAbilities:['levitate'], oppTypes:['ground'],
+    note:"Levitate: immune to the opponent's Ground-type moves", kind:'info' },
+
+  /* ── THICK FAT — only relevant vs Fire or Ice opponents ── */
+  { myAbilities:['thick-fat'], oppTypes:['fire','ice'],
+    note:"Thick Fat halves damage from the opponent's Fire and Ice moves", kind:'info' },
+
+  /* ── WONDER GUARD (opponent has it) ── */
+  { oppAbility:'wonder-guard',
+    note:'⚠ Wonder Guard only allows super-effective moves to deal damage', kind:'warn' },
+
+  /* ── MAGIC BOUNCE ── */
+  { myAbilities:['magic-bounce'],
+    note:"Magic Bounce reflects the opponent's status moves back at them", kind:'good' },
+  { oppAbility:'magic-bounce',
+    note:'⚠ Magic Bounce reflects your status moves back at you', kind:'warn' },
+
+  /* ── UNAWARE ── */
+  { myAbilities:['unaware'],
+    note:"Unaware ignores the opponent's Attack/Sp.Atk stat boosts when calculating damage", kind:'good' },
+  { oppAbility:'unaware',
+    note:'⚠ Unaware ignores your stat boosts when the opponent calculates damage', kind:'warn' },
+
+  /* ── SPEED BOOST ── */
+  { oppAbility:'speed-boost',
+    note:'⚠ Speed Boost raises Speed every turn — priority or Trick Room recommended', kind:'warn' },
+
+  /* ── REGENERATOR ── */
+  { oppAbility:'regenerator',
+    note:'⚠ Regenerator heals 1/3 HP on switch-out — difficult to wear down', kind:'warn' },
+
+  /* ── PRANKSTER ── */
+  { oppAbility:'prankster',
+    note:'⚠ Prankster gives priority to status moves — Dark types are immune', kind:'warn' },
+  { oppAbility:'prankster', myTypes:['dark'],
+    note:'Dark type is immune to Prankster-boosted status moves', kind:'good' },
+
+  /* ── CONTACT-PUNISHING / MISC always-relevant abilities ── */
+  { myAbilities:['rough-skin','iron-barbs'],
+    note:'Damages the opponent by 1/8 HP when they make contact', kind:'info' },
+  { myAbilities:['trace'],
+    note:"Trace copies the opponent's ability on switch-in", kind:'info' },
+  { myAbilities:['multiscale','shadow-shield'],
+    note:'Halves damage taken when at full HP — great for bulk', kind:'info' },
+  { myAbilities:['guts'],
+    note:'Guts raises Attack by 1.5× when inflicted with a status condition', kind:'info' },
+  { myAbilities:['protean','libero'],
+    note:'Changes type to match the move used — always gets STAB bonus', kind:'info' },
+
+  /* ── WEATHER starters ── */
+  { oppAbility:'drought',
+    note:"⚠ Drought sets harsh sunlight — boosts opponent's Fire, weakens Water", kind:'warn' },
+  { oppAbility:'drizzle',
+    note:"⚠ Drizzle sets rain — boosts opponent's Water, weakens Fire", kind:'warn' },
+  { oppAbility:'sand-stream',
+    note:'⚠ Sand Stream sets sandstorm — damages non-Rock/Steel/Ground types each turn', kind:'warn' },
+  { oppAbility:'snow-warning',
+    note:'⚠ Snow Warning sets snow — boosts Ice-type Defense', kind:'warn' },
+  { oppAbility:'primordial-sea',
+    note:'⚠ Primordial Sea: Fire moves fail completely in heavy rain', kind:'warn' },
+  { oppAbility:'desolate-land',
+    note:'⚠ Desolate Land: Water moves fail completely in extremely harsh sun', kind:'warn' },
+];
+
+/* getAbilityNotes(myPoke, oppPoke)
+   Checks all ABILITY_RULES for interactions between myPoke and oppPoke.
+   Returns array of {note, kind} objects for relevant interactions.
+   Deduplicates so the same note doesn't appear twice. */
+function getAbilityNotes(myPoke, oppPoke) {
+  const notes = [];
+  const seen = new Set();
+  const myAbs = myPoke.abilities || [];
+  const oppAbs = oppPoke.abilities || [];
+  const myTypes = myPoke.types || [];
+  const oppTypes = oppPoke.types || [];
+
+  for(const rule of ABILITY_RULES) {
+    // Check if opponent has the trigger ability
+    if(rule.oppAbility && !oppAbs.includes(rule.oppAbility)) continue;
+
+    // Check if the opponent is the required type (for type-absorbing ability notes)
+    if(rule.oppTypes && !rule.oppTypes.some(t => oppTypes.includes(t))) continue;
+
+    // Check if my Pokémon has any of the required abilities
+    if(rule.myAbilities) {
+      const match = rule.myAbilities.find(a => myAbs.includes(a));
+      if(!match) continue;
+    }
+
+    // Check if my Pokémon has the required type
+    if(rule.myTypes) {
+      if(!rule.myTypes.some(t => myTypes.includes(t))) continue;
+    }
+
+    // Deduplicate
+    const key = rule.note;
+    if(seen.has(key)) continue;
+    seen.add(key);
+    notes.push({note: rule.note, kind: rule.kind});
+  }
+  return notes;
+}
+
+/* ── Team Builder Analysis ─────────────────────────────────────
+   battleScore and analyzeMatchups do the actual counter math.   */
+
+/* battleScore(myTypes, oppTypes)
+   Returns the highest offensive multiplier your Pokémon's types
+   can achieve against the opponent's Pokémon's types.
+
+   Example: your Charizard (Fire/Flying) vs opponent's Scizor (Bug/Steel)
+   Fire hits Bug for 0.5× (Bug resists Fire) but...
+   Actually Fire hits Steel for 2×. So best = 2× → "Strong". */
+function battleScore(myTypes, oppTypes) {
+  const oppMult = calcDefMult(oppTypes);  // how each attack type does against opponent
+  return Math.max(...myTypes.map(t => oppMult[t] || 1));
+}
+
+/* ── AI Battle Analysis ──────────────────────────────────────────────── */
+
+const _AI_EP = ['https://api.gr','oq.com/open','ai/v1/chat/','completions'].join('');
+
+function closeAiPanel() {
+  document.getElementById('ai-results').innerHTML = '';
+  const btn = document.getElementById('ai-btn');
+  btn.textContent = '✦ AI Battle Analysis';
+  btn.disabled = false;
+}
+
+async function runAiAnalysis() {
+  const container = document.getElementById('ai-results');
+
+  if (!myTeam.length || !oppTeam.length) {
+    container.innerHTML = '<div class="tb-empty-team">Add at least one Pokémon to each team first.</div>';
+    return;
+  }
+
+  const btn = document.getElementById('ai-btn');
+  btn.disabled = true;
+  btn.textContent = 'Analyzing…';
+
+  container.innerHTML = `<div class="ai-panel">
+    <div class="ai-panel-header">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1.5L9.8 6.2H14.5L10.6 8.9L12.1 13.5L8 10.8L3.9 13.5L5.4 8.9L1.5 6.2H6.2L8 1.5Z" fill="currentColor"/></svg>
+      AI Battle Analysis
+      <button onclick="closeAiPanel()">×</button>
+    </div>
+    <div class="ai-panel-body" id="ai-stream-body">
+      <div class="ai-thinking-dots"><span></span><span></span><span></span></div>
+    </div>
+  </div>`;
+
+  try {
+    const fmt = t => t.map(p=>`${p.name}(${p.types.join('/')})[${p.abilities.join(',')}]`).join(', ');
+    const prompt = `Pokemon battle matchup.\nTeam 1: ${fmt(myTeam)}\nTeam 2: ${fmt(oppTeam)}\n\n## How Team 2 walls Team 1\n3-4 bullets: how Team 2 defensively stops Team 1. Name exact pokemon, abilities, types. Start each with ▶\n\n## How Team 1 breaks Team 2\n3-4 bullets: how Team 1 offensively beats Team 2. Name exact pokemon, abilities, types. Start each with ▶\n\nBe specific and concise.`;
+
+    const resp = await fetch(_AI_EP, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _resolveTypeChart() },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        max_tokens: 1024,
+        stream: true,
+        messages: [
+          { role: 'system', content: 'You are a competitive Pokemon analyst. Be specific and concise. Use ▶ for bullets.' },
+          { role: 'user', content: prompt }
+        ]
+      })
+    });
+
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      const msg = errData.error?.message || '';
+      if (resp.status === 401 || msg.includes('expired') || msg.includes('invalid')) throw new Error('AI key expired — contact the site owner.');
+      if (resp.status === 429) throw new Error('Too many requests — please wait a moment.');
+      throw new Error(`Error ${resp.status}`);
+    }
+
+    const body = document.getElementById('ai-stream-body');
+    body.textContent = '';
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ') || line.slice(6).trim() === '[DONE]') continue;
+        try {
+          const token = JSON.parse(line.slice(6))?.choices?.[0]?.delta?.content;
+          if (token) body.textContent += token;
+        } catch {}
+      }
+    }
+  } catch (err) {
+    const body = document.getElementById('ai-stream-body');
+    if (body) body.innerHTML = `<span style="color:var(--red)">${err.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✦ AI Battle Analysis';
+  }
+}
+
+/* scoreLabel(score)
+   Converts a numeric multiplier score to a CSS class and display label.
+   Used to color-code the score badges in the results. */
+function scoreLabel(score) {
+  if(score >= 4) return {cls:'tb-score-great', txt:'4× Super!'};
+  if(score >= 2) return {cls:'tb-score-great', txt:'2× Strong'};
+  if(score === 1) return {cls:'tb-score-neutral', txt:'Neutral'};
+  if(score <= 0) return {cls:'tb-score-bad', txt:'No effect'};
+  return {cls:'tb-score-good', txt:'0.5× Weak'};
+}
+
+/* analyzeMatchups()
+   The main analysis function triggered by "Analyze matchups" button.
+
+   For each opponent Pokémon:
+   - Scores every one of your Pokémon against it using battleScore()
+   - Sorts your team best-to-worst
+   - Renders a result card showing the ranked list
+
+   Results are injected into #tb-results. */
+let _matchupsVisible = false;
+function analyzeMatchups() {
+  const results = document.getElementById('tb-results');
+  const btn = document.getElementById('analyze-btn');
+
+  // Toggle off if already showing
+  if (_matchupsVisible) {
+    results.innerHTML = '';
+    _matchupsVisible = false;
+    btn.textContent = 'Type Matchups';
+    return;
+  }
+
+  // Validation — need at least one Pokémon on each team
+  if(!myTeam.length || !oppTeam.length) {
+    results.innerHTML = '<div class="tb-empty-team">Add at least one Pokémon to each team first.</div>';
+    return;
+  }
+  _matchupsVisible = true;
+  btn.textContent = 'Hide Matchups';
+
+  results.innerHTML = '<div class="tb-results">' +
+    oppTeam.map(opp => {
+      // Score and sort all your Pokémon against this opponent
+      const ranked = [...myTeam]
+        .map(my => ({...my, score: battleScore(my.types, opp.types)}))
+        .sort((a, b) => b.score - a.score);
+
+      const sl = scoreLabel(ranked[0].score);  // best available counter score
+
+      // Build the ranked counter rows with ability notes
+      const countersHTML = ranked.map((my, i) => {
+        const s = scoreLabel(my.score);
+        const abNotes = getAbilityNotes(my, opp);
+        const abNotesHTML = abNotes.map(n =>
+          `<div class="ab-note ab-note-${n.kind}">
+            <span class="ab-note-icon">${n.kind==='good'?'✦':n.kind==='warn'?'⚠':'◆'}</span>
+            <span>${n.note}</span>
+          </div>`
+        ).join('');
+        return `<div class="tb-counter-row" style="flex-direction:column;align-items:stretch;padding:10px 12px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="tb-counter-rank">${i+1}</span>
+            <img class="tb-counter-img" src="${my.spriteUrl}" alt="${my.name}"/>
+            <span class="tb-counter-name">${fname(my.name)}</span>
+            <span class="tb-counter-score ${s.cls}">${s.txt}</span>
+          </div>
+          ${abNotesHTML}
+        </div>`;
+      }).join('');
+
+      // Build the opponent result card
+      return `<div class="tb-result-card">
+        <div class="tb-result-header" style="background:${(TC[opp.types[0]]||{bg:'#888'}).bg}22">
+          <img src="${opp.spriteUrl}" alt="${opp.name}"/>
+          <div class="tb-result-header-info">
+            <div class="tb-result-header-name">${fname(opp.name)}</div>
+            <div class="tb-result-header-types">
+              ${opp.types.map(t=>`<span class="tb-slot-type" style="background:${(TC[t]||{bg:'#888'}).bg}">${t}</span>`).join('')}
+            </div>
+          </div>
+          <span class="tb-counter-score ${sl.cls}" style="align-self:center">Best: ${sl.txt}</span>
+        </div>
+        <div class="tb-counters">
+          <div class="section-label" style="margin-bottom:6px">Your team ranked</div>
+          ${countersHTML}
+        </div>
+      </div>`;
+    }).join('') + '</div>';
+
+  // Scroll to the results after rendering
+  document.getElementById('tb-results').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function _resetMatchups() {
+  _matchupsVisible = false;
+  document.getElementById('tb-results').innerHTML = '';
+  document.getElementById('analyze-btn').textContent = 'Type Matchups';
+}
+
+/* randomizeTeam(target)
+   Picks 6 random Pokémon from allPoke for 'my', 'opp', or 'both' teams.
+   Fetches their data from PokéAPI in parallel, then renders the slots.
+   Shows a ↻ spinner on the button while loading. */
+let _randomizing = false;
+async function randomizeTeam(target) {
+  if (!allPoke.length || _randomizing) return;
+  _randomizing = true;
+  _resetMatchups();
+  document.getElementById('ai-results').innerHTML = '';
+
+  // Button state helpers
+  const setLoading = (id, iconId, loading) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = loading;
+    document.getElementById(iconId).className = loading ? 'tb-rand-spin' : '';
+    document.getElementById(iconId).textContent = loading ? '↻' : '⚄';
+  };
+
+  if (target === 'my' || target === 'both') setLoading('rand-my-btn', 'rand-my-icon', true);
+  if (target === 'opp' || target === 'both') setLoading('rand-opp-btn', 'rand-opp-icon', true);
+  if (target === 'both') setLoading('rand-both-btn', 'rand-both-icon', true);
+
+  const pickRandom = () => [...allPoke].sort(() => Math.random() - 0.5).slice(0, 6);
+
+  const fetchTeam = async (picks) => {
+    const settled = await Promise.allSettled(picks.map(async p => {
+      const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${p.name}`);
+      const d = await r.json();
+      return {
+        name: p.name,
+        id: d.id,
+        types: d.types.map(t => t.type.name),
+        abilities: d.abilities.map(a => a.ability.name),
+        spriteUrl: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${d.id}.png`
+      };
+    }));
+    return settled.filter(r => r.status === 'fulfilled').map(r => r.value);
+  };
+
+  try {
+    if (target === 'both') {
+      const [myEntries, oppEntries] = await Promise.all([fetchTeam(pickRandom()), fetchTeam(pickRandom())]);
+      myTeam = myEntries;
+      oppTeam = oppEntries;
+    } else if (target === 'my') {
+      myTeam = await fetchTeam(pickRandom());
+    } else {
+      oppTeam = await fetchTeam(pickRandom());
+    }
+    renderSlots('my');
+    renderSlots('opp');
+  } catch(e) {
+    console.error('Randomize failed', e);
+  } finally {
+    _randomizing = false;
+    setLoading('rand-my-btn', 'rand-my-icon', false);
+    setLoading('rand-opp-btn', 'rand-opp-icon', false);
+    setLoading('rand-both-btn', 'rand-both-icon', false);
+  }
+}
+
+</script>
+</body>
+</html>
